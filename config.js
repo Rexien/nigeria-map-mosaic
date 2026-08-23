@@ -24,8 +24,8 @@ window.APP_CONFIG = {
   // ==========================================
   // Replace these with your Supabase project URL and anon public key.
   // Obtain these from: Supabase Dashboard -> Project Settings -> API
-  SUPABASE_URL: "https://YOUR_SUPABASE_PROJECT_ID.supabase.co",
-  SUPABASE_ANON_KEY: "YOUR_SUPABASE_ANON_PUBLIC_KEY",
+  SUPABASE_URL: "https://ptgrcseudavkaviwdgzo.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_GyaJRCIH81_tOYCTMF7jew_ZwvJU5EN",
 
   // Table name in Supabase
   TABLE_NAME: "responses",
