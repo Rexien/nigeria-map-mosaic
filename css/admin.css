@@ -360,3 +360,16 @@ body {
   text-align: center;
   color: var(--text-dim);
 }
+
+/* Hide Netlify Injected Drawer & Badges */
+[data-netlify-drawer],
+#netlify-drawer,
+.netlify-badge,
+iframe[title="Netlify Drawer"],
+iframe[title*="Netlify"],
+div[data-netlify-feedback] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
