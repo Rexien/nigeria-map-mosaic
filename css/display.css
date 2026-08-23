@@ -1,0 +1,335 @@
+/* ==========================================================
+   Nigeria Mosaic - Big Screen & Projector Display Styles
+   Dark Luxury Corporate Aesthetic: Emerald, Gold, Crisp Slate
+   ========================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Cabinet+Grotesk:wght@700;800;900&family=Space+Grotesk:wght@500;700&display=swap');
+
+:root {
+  --bg-dark: #0D261A;
+  --bg-gradient: radial-gradient(circle at 50% 50%, #1A5338 0%, #123C28 42%, #0A2216 75%, #06170F 100%);
+  --map-fill: rgba(16, 185, 129, 0.24);
+  --map-border: #34D399;
+  --map-glow: rgba(16, 185, 129, 0.55);
+  --text-primary: #FFFFFF;
+  --text-muted: rgba(255, 255, 255, 0.88);
+  --accent-gold: #FBBF24;
+  --accent-emerald: #10B981;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-dark);
+  background-image: var(--bg-gradient);
+  font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--text-primary);
+}
+
+/* Screen Wrapper (Projector Safe 16:9 & 4:3) */
+#display-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2.5vh 3.5vw;
+}
+
+/* Luminous Stage Ambient Lighting Behind Map */
+.ambient-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 75vw;
+  height: 75vh;
+  background: radial-gradient(ellipse at center, rgba(16, 185, 129, 0.38) 0%, rgba(52, 211, 153, 0.20) 35%, rgba(251, 191, 36, 0.12) 60%, transparent 80%);
+  pointer-events: none;
+  z-index: 1;
+  filter: blur(45px);
+}
+
+/* Subtle Grid Texture */
+.grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Top Header Bar */
+header.display-header {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #6EE7B7;
+  text-transform: uppercase;
+  width: fit-content;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.2);
+}
+
+.badge-dot {
+  width: 9px;
+  height: 9px;
+  background-color: #34D399;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #34D399;
+  animation: pulseDot 2s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.7; }
+}
+
+.event-title {
+  font-size: clamp(1.8rem, 2.7vw, 3rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #FFFFFF 20%, #D1FAE5 60%, #FDE68A 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+}
+
+.event-question {
+  font-size: clamp(1.05rem, 1.35vw, 1.45rem);
+  color: var(--text-muted);
+  font-weight: 600;
+  max-width: 65vw;
+  line-height: 1.35;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+/* Header Right - Stats & Live Indicator */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.stat-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  backdrop-filter: blur(14px);
+  padding: 8px 20px;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(16, 185, 129, 0.12);
+}
+
+.stat-value {
+  font-size: 1.85rem;
+  font-weight: 900;
+  font-family: 'Space Grotesk', monospace;
+  color: #FBBF24;
+  line-height: 1;
+  text-shadow: 0 0 12px rgba(251, 191, 36, 0.4);
+}
+
+.stat-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 3px;
+  font-weight: 600;
+}
+
+/* Main Map & Mosaic Canvas Container */
+main#mosaic-stage {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 5;
+  margin: 1vh 0;
+}
+
+#map-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Nigeria Boundary SVG Styles */
+.nigeria-path {
+  fill: var(--map-fill);
+  stroke: var(--map-border);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 35px rgba(16, 185, 129, 0.6)) drop-shadow(0 0 10px rgba(251, 191, 36, 0.35));
+  transition: all 0.6s ease;
+}
+
+.nigeria-glow-border {
+  fill: none;
+  stroke: rgba(251, 191, 36, 0.5);
+  stroke-width: 8px;
+  filter: blur(8px);
+}
+
+/* Word Cloud SVG Elements (Optimized for High-Contrast Projector Legibility) */
+.cloud-word {
+  cursor: default;
+  transition: opacity 0.5s ease, transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), filter 0.4s ease;
+  will-change: transform, opacity;
+  paint-order: stroke fill;
+  stroke: rgba(0, 0, 0, 0.85);
+  stroke-width: 1.2px;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.9));
+  letter-spacing: -0.01em;
+}
+
+.cloud-word.newly-added {
+  animation: wordPop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes wordPop {
+  0% { transform: scale(0); opacity: 0; filter: brightness(2.2); }
+  60% { transform: scale(1.15); opacity: 1; filter: brightness(1.7); }
+  100% { transform: scale(1); opacity: 1; filter: brightness(1); }
+}
+
+/* Ambient Shimmer / Golden Light Sweep */
+.cloud-word.ambient-shimmer {
+  filter: drop-shadow(0 0 16px #FBBF24) drop-shadow(0 0 4px #FFFFFF) brightness(1.6);
+  transition: filter 0.8s ease-in-out;
+}
+
+/* Bottom Footer Bar */
+footer.display-footer {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.footer-instructions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: clamp(0.85rem, 1vw, 1.1rem);
+  color: var(--text-muted);
+}
+
+.submit-url-badge {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 4px 14px;
+  border-radius: 8px;
+  font-family: 'Space Grotesk', monospace;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: 0.04em;
+}
+
+.live-pulse-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: #34D399;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+
+/* Re-pack Notice Banner (Subtle indicator) */
+#repack-indicator {
+  position: absolute;
+  bottom: 60px;
+  right: 40px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  backdrop-filter: blur(8px);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  color: #34D399;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+  z-index: 20;
+}
+
+#repack-indicator.visible {
+  opacity: 1;
+}
+
+/* Loading Overlay */
+#loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-dark);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  z-index: 100;
+  transition: opacity 0.6s ease;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(16, 185, 129, 0.2);
+  border-top-color: #10B981;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

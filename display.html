@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Nigeria Mosaic — Live Word Cloud Display</title>
+  <meta name="description" content="Live attendee word cloud mosaic packed inside the geographic boundary of Nigeria.">
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="css/display.css">
+</head>
+<body>
+
+  <!-- Loading State -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div style="font-weight: 700; letter-spacing: 0.1em; color: #10B981;">INITIALIZING MOSAIC...</div>
+  </div>
+
+  <div id="display-container">
+    <!-- Ambient Background Light and Grid -->
+    <div class="ambient-glow"></div>
+    <div class="grid-overlay"></div>
+
+    <!-- Top Header -->
+    <header class="display-header">
+      <div class="header-left">
+        <div class="event-badge">
+          <span class="badge-dot"></span>
+          <span>Live Interactive Display</span>
+        </div>
+        <h1 class="event-title">NIGERIA MOSAIC</h1>
+        <p class="event-question" id="display-question">What single word represents Nigeria's future to you?</p>
+      </div>
+
+      <div class="header-right">
+        <div class="stat-pill">
+          <span class="stat-value" id="stat-total-count">0</span>
+          <span class="stat-label">Submissions</span>
+        </div>
+        <div class="stat-pill">
+          <span class="stat-value" id="stat-unique-count">0</span>
+          <span class="stat-label">Unique Voices</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Visual Stage (SVG Nigeria Map + Word Mosaic) -->
+    <main id="mosaic-stage">
+      <svg id="map-svg" xmlns="http://www.w3.org/2000/svg">
+        <!-- Filter definitions for drop shadows and glow -->
+        <defs>
+          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="8" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+
+        <!-- Background map boundary layer -->
+        <g id="map-boundary-group"></g>
+
+        <!-- Placed Words Layer -->
+        <g id="words-layer"></g>
+      </svg>
+
+      <!-- Re-pack Notification Toast -->
+      <div id="repack-indicator">✨ Re-balancing mosaic...</div>
+    </main>
+
+    <!-- Bottom Footer Bar -->
+    <footer class="display-footer">
+      <div class="footer-instructions">
+        <span>Submit your word at:</span>
+        <span class="submit-url-badge" id="submit-url-badge">nigeriamosaic.com</span>
+      </div>
+
+      <div class="live-pulse-container">
+        <span class="badge-dot"></span>
+        <span>Realtime Updates Active</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Dependencies (Bundled locally) -->
+  <script src="config.js"></script>
+  <script src="lib/supabase.min.js"></script>
+  <script src="lib/d3.v7.min.js"></script>
+  <script src="lib/d3.layout.cloud.js"></script>
+  <script src="data/nigeria-bounds.js"></script>
+  
+  <!-- Core Logic -->
+  <script src="js/stemmer.js"></script>
+  <script src="js/profanity.js"></script>
+  <script src="js/supabase-client.js"></script>
+  <script src="js/display.js"></script>
+</body>
+</html>

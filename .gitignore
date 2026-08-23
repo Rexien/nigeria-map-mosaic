@@ -1,0 +1,14 @@
+# OS metadata files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node / package artifacts (if any in future)
+node_modules/
+.npm
