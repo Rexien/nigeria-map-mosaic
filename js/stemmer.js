@@ -20,7 +20,7 @@
    */
   function cleanWord(word) {
     if (!word || typeof word !== 'string') return '';
-    return word.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return word.trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
   }
 
   /**
@@ -85,52 +85,52 @@
   };
 
   /**
-   * Computes the stem for a given word
+   * Computes the stem for a given word or two-word phrase
    * @param {string} word
    * @returns {string} stem
    */
   function stem(word) {
     const cleaned = cleanWord(word);
     if (!cleaned) return '';
-    if (cleaned.length <= 3) return cleaned;
 
-    // Check explicit overrides first
-    if (STEM_OVERRIDES[cleaned]) {
-      return STEM_OVERRIDES[cleaned];
-    }
+    const parts = cleaned.split(' ');
+    const stemmedParts = parts.map(part => {
+      if (part.length <= 3) return part;
+      if (STEM_OVERRIDES[part]) return STEM_OVERRIDES[part];
 
-    let result = cleaned;
-
-    // Apply suffix stripping rules
-    for (let i = 0; i < SUFFIX_RULES.length; i++) {
-      const { pattern, replace } = SUFFIX_RULES[i];
-      if (pattern.test(result)) {
-        const candidate = result.replace(pattern, replace);
-        // Do not over-stem short roots (keep at least 3 characters)
-        if (candidate.length >= 3) {
-          result = candidate;
-          break;
+      let result = part;
+      for (let i = 0; i < SUFFIX_RULES.length; i++) {
+        const { pattern, replace } = SUFFIX_RULES[i];
+        if (pattern.test(result)) {
+          const candidate = result.replace(pattern, replace);
+          if (candidate.length >= 3) {
+            result = candidate;
+            break;
+          }
         }
       }
-    }
 
-    // Clean up trailing double consonants (e.g. "progress" -> "progres")
-    if (result.length > 4 && result[result.length - 1] === result[result.length - 2]) {
-      result = result.slice(0, -1);
-    }
+      if (result.length > 4 && result[result.length - 1] === result[result.length - 2]) {
+        result = result.slice(0, -1);
+      }
+      return result;
+    });
 
-    return result;
+    return stemmedParts.join(' ');
   }
 
   /**
-   * Capitalizes first letter of word cleanly for display
+   * Capitalizes first letter of each word cleanly for display
    * @param {string} word 
    * @returns {string}
    */
   function formatDisplayWord(word) {
     if (!word) return '';
-    const trimmed = word.trim();
-    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+    const trimmed = word.trim().replace(/\s+/g, ' ');
+    return trimmed
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
   }
 
   /**

@@ -76,17 +76,10 @@
     const value = input.value;
     updateCharCounter();
 
-    // Check if input contains space
-    if (/\s/.test(value)) {
-      showError('Please enter only a single word with no spaces.');
-      input.value = value.replace(/\s+/g, '');
-      updateCharCounter();
-      return;
-    }
-
-    // Check if user entered camelCase (e.g. TwoWords)
-    if (/[A-Z]/.test(value.slice(1))) {
-      showError('Please enter only a single word (no camelCase like "TwoWords").');
+    // Check if user has entered more than 2 words
+    const words = value.trim().split(/\s+/).filter(Boolean);
+    if (words.length > 2) {
+      showError('Please enter a maximum of two words (e.g. "Warm Hospitality").');
       return;
     }
 
@@ -160,11 +153,12 @@
       }
     } else {
       if (!rawWord) {
-        showError('Please enter a word.');
+        showError('Please enter one or two words.');
         return;
       }
-      if (/\s/.test(rawWord)) {
-        showError('Please enter only a single word with no spaces.');
+      const words = rawWord.split(/\s+/).filter(Boolean);
+      if (words.length > 2) {
+        showError('Please enter a maximum of two words.');
         return;
       }
     }

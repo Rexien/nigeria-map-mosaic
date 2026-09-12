@@ -1,48 +1,103 @@
-# Netlify Configuration for Nigeria Mosaic Static App
-
 [build]
   publish = "."
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/content/*"
+  to = "/404.html"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/supabase/*"
+  to = "/404.html"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/scripts/*"
+  to = "/404.html"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/tests/*"
+  to = "/404.html"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/load/*"
+  to = "/404.html"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/schema.sql"
+  to = "/404.html"
+  status = 404
+  force = true
+[[redirects]]
+  from = "/.env*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/activities"
+  to = "/activities.html"
+  status = 200
+[[redirects]]
+  from = "/lens"
+  to = "/lens.html"
+  status = 200
+[[redirects]]
+  from = "/lens/live"
+  to = "/lens-live.html"
+  status = 200
+[[redirects]]
+  from = "/play"
+  to = "/play.html"
+  status = 200
+[[redirects]]
+  from = "/passport"
+  to = "/passport.html"
+  status = 200
+[[redirects]]
+  from = "/display"
+  to = "/display.html"
+  status = 200
+[[redirects]]
+  from = "/admin/content"
+  to = "/admin-content.html"
+  status = 200
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200
 
 [[headers]]
   for = "/*"
   [headers.values]
     X-Frame-Options = "SAMEORIGIN"
-    X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
-    Access-Control-Allow-Origin = "*"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; font-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
 
 [[headers]]
   for = "/*.html"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
-
 [[headers]]
   for = "/config.js"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
-
 [[headers]]
   for = "/data/*"
   [headers.values]
     Cache-Control = "public, max-age=86400"
-
 [[headers]]
   for = "/lib/*"
   [headers.values]
-    Cache-Control = "public, max-age=604800"
-
-# Clean URL Redirects
-[[redirects]]
-  from = "/submit"
-  to = "/submit.html"
-  status = 200
-
-[[redirects]]
-  from = "/display"
-  to = "/display.html"
-  status = 200
-
-[[redirects]]
-  from = "/admin"
-  to = "/admin.html"
-  status = 200
+    Cache-Control = "public, max-age=604800, immutable"

@@ -35,7 +35,7 @@
 
   /**
    * Validates word submission structure
-   * - Must be a single word (no whitespace)
+   * - Must be 1 or 2 words (maximum 1 space separator)
    * - Length between 1 and MAX_WORD_LENGTH
    * 
    * @param {string} word 
@@ -43,32 +43,28 @@
    */
   function validateSubmission(word) {
     if (!word || typeof word !== 'string') {
-      return { valid: false, error: 'Please enter a word.' };
+      return { valid: false, error: 'Please enter one or two words.' };
     }
 
-    const trimmed = word.trim();
+    const trimmed = word.trim().replace(/\s+/g, ' ');
     if (trimmed.length === 0) {
-      return { valid: false, error: 'Please enter a word.' };
+      return { valid: false, error: 'Please enter one or two words.' };
     }
 
-    // Check for any internal whitespace
-    if (/\s/.test(trimmed)) {
-      return { valid: false, error: 'Please enter only one single word with no spaces.' };
+    // Check for maximum 2 words (at most 1 space separator)
+    const wordCount = trimmed.split(' ').length;
+    if (wordCount > 2) {
+      return { valid: false, error: 'Please enter a maximum of two words (e.g. "Warm Hospitality").' };
     }
 
-    // Check for camelCase bypass (capital letters after the first character)
-    if (/[A-Z]/.test(trimmed.slice(1))) {
-      return { valid: false, error: 'Please enter only one single word (no camelCase like "TwoWords").' };
-    }
-
-    const maxLen = (window.APP_CONFIG && window.APP_CONFIG.MAX_WORD_LENGTH) || 20;
+    const maxLen = (window.APP_CONFIG && window.APP_CONFIG.MAX_WORD_LENGTH) || 25;
     if (trimmed.length > maxLen) {
-      return { valid: false, error: `Word is too long (maximum ${maxLen} characters).` };
+      return { valid: false, error: `Submission is too long (maximum ${maxLen} characters).` };
     }
 
     // Check for weird symbols only
-    if (/^[^a-zA-Z0-9]+$/.test(trimmed)) {
-      return { valid: false, error: 'Please enter a valid word with letters.' };
+    if (/^[^a-zA-Z0-9\s]+$/.test(trimmed)) {
+      return { valid: false, error: 'Please enter valid words with letters.' };
     }
 
     return { valid: true, error: null };

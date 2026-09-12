@@ -12,3 +12,6 @@ Desktop.ini
 # Node / package artifacts (if any in future)
 node_modules/
 .npm
+.env
+.netlify/
+.local-data/

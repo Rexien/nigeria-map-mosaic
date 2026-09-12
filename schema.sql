@@ -8,16 +8,23 @@
 create table if not exists public.responses (
   id uuid primary key default gen_random_uuid(),
   raw_word text not null check (
-    char_length(raw_word) > 0 
-    and char_length(raw_word) <= 20 
-    and raw_word !~ '\s'
-    and raw_word !~ '^.[^A-Z]*[A-Z]'
+    char_length(raw_word) > 0
+    and char_length(raw_word) <= 25
+    and array_length(regexp_split_to_array(trim(raw_word), '\s+'), 1) <= 2
   ),
   word_lower text not null,
   stem text not null,
   is_hidden boolean default false not null,
   is_flagged boolean default false not null,
   created_at timestamptz default now() not null
+);
+
+-- Ensure constraint is up to date if table was created previously
+alter table public.responses drop constraint if exists responses_raw_word_check;
+alter table public.responses add constraint responses_raw_word_check check (
+  char_length(raw_word) > 0
+  and char_length(raw_word) <= 25
+  and array_length(regexp_split_to_array(trim(raw_word), '\s+'), 1) <= 2
 );
 
 -- 2. Create high-performance indexes
@@ -50,14 +57,13 @@ create policy "Allow public read responses"
   on public.responses for select
   using (true);
 
--- Policy B: Allow anyone to insert a valid single word (<= 20 chars, no spaces, no camelCase)
+-- Policy B: Allow anyone to insert valid 1 or 2 words (<= 25 chars, max 2 words)
 create policy "Allow public insert responses"
   on public.responses for insert
   with check (
-    char_length(raw_word) > 0 
-    and char_length(raw_word) <= 20 
-    and raw_word !~ '\s'
-    and raw_word !~ '^.[^A-Z]*[A-Z]'
+    char_length(raw_word) > 0
+    and char_length(raw_word) <= 25
+    and array_length(regexp_split_to_array(trim(raw_word), '\s+'), 1) <= 2
   );
 
 -- Policy C: Allow updating is_hidden moderation status

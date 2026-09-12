@@ -1,124 +1,50 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Nigeria Mosaic — On-Site Moderation Dashboard</title>
-  <meta name="description" content="Live event word moderation dashboard for Nigeria Mosaic.">
-  
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-  
-  <!-- Admin Styles -->
-  <link rel="stylesheet" href="css/admin.css">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Event control — NIAC Live</title><link rel="stylesheet" href="/css/app.css">
 </head>
-<body>
+<body data-page="admin-console"><div class="shell-bar"></div>
+<header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span>NIAC Live<small>Event control</small></span></a><div class="header-links"><a href="/" target="_blank">Participant page</a><a class="button compact" href="/display" target="_blank">Open big screen</a></div></header>
+<main class="page admin-page">
+  <section id="admin-login" class="panel narrow hidden"><p class="eyebrow">Event team only</p><h1>Sign in to run NIAC Live</h1><p class="muted">Use the event-team account you were given.</p><div class="field"><label for="admin-email">Email</label><input id="admin-email" type="email" autocomplete="username"></div><div class="field"><label for="admin-password">Password</label><input id="admin-password" type="password" autocomplete="current-password"></div><p id="admin-login-message" class="error" aria-live="polite"></p><button class="button" id="admin-login-button">Sign in</button></section>
+  <section id="control-room" class="hidden">
+    <div class="admin-page-heading"><div><p class="eyebrow">Backstage control</p><h1>Run the room</h1><p>Listen for the MC’s cue. One click sends the question to the projector and every phone.</p></div><div class="live-summary"><span>Right now</span><strong id="live-state">Loading…</strong></div></div>
+    <div class="admin-grid">
+      <nav class="admin-nav panel" aria-label="Admin navigation"><span class="signed-in">Signed in as<br><strong id="admin-name"></strong></span><a class="active" href="/admin">Run the event</a><a href="/admin/content">Edit questions</a><a href="#quick-guide">Quick guide</a><a href="/display" target="_blank">Big screen</a></nav>
+      <div class="admin-workspace">
+        <div class="score-strip admin-stats"><div><span>People joined</span><strong id="admin-participants">0</strong></div><div><span>Answers received</span><strong id="admin-responses">0</strong></div><div><span>Screen activity</span><strong id="screen-activity">—</strong></div><div><span>Run mode</span><strong id="run-mode">—</strong></div></div>
 
-  <!-- Optional PIN Modal -->
-  <div class="pin-modal-overlay" id="pin-modal-overlay" style="display: none;">
-    <div class="pin-modal">
-      <div style="font-size: 2rem;">🔒</div>
-      <h2 style="font-size: 1.3rem; font-weight: 800;">Moderator Access</h2>
-      <p style="font-size: 0.85rem; color: var(--text-dim);">
-        Please enter the on-site event admin PIN to unlock moderation controls.
-      </p>
-      
-      <input type="password" id="pin-input" class="pin-input" maxlength="8" placeholder="••••" autocomplete="off">
-      <div id="pin-error" style="color: var(--accent-red); font-size: 0.82rem; min-height: 18px;"></div>
-      
-      <button type="button" id="btn-submit-pin" class="btn-action" style="justify-content: center; background: var(--accent-emerald); color: #000; font-weight: 700; border: none; padding: 12px;">
-        Unlock Dashboard
-      </button>
+        <section class="panel operator-panel">
+          <div class="section-heading"><div><span class="step-number">1</span><h2>Choose what appears on the big screen</h2></div><p>The projector changes automatically when you choose an activity.</p></div>
+          <div class="screen-options" id="activity-options">
+            <label><input type="radio" name="active-activity" value="lens"><span><strong>Live Nigeria map</strong><small>Words and phrases appear inside the map.</small></span></label>
+            <label><input type="radio" name="active-activity" value="passport"><span><strong>Passport trivia</strong><small>Questions, answers and the combined scores.</small></span></label>
+            <label><input type="radio" name="active-activity" value="decode"><span><strong>Decode the State</strong><small>Reveal one clue at a time.</small></span></label>
+          </div>
+          <p id="screen-message" class="status-message" aria-live="polite"></p>
+        </section>
+
+        <section class="panel operator-panel cue-desk" id="quiz-controls">
+          <div class="section-heading"><div><span class="step-number">2</span><h2>Open the next question</h2></div><p>The timer, answer reveal and score update happen automatically.</p></div>
+          <div class="open-question-row"><div class="field"><label for="question-select">Question</label><select id="question-select"><option value="">Choose a ready question</option></select></div><button class="button open-question-button" id="open-question"><span>Open question</span><small>Send to projector + phones</small></button></div>
+          <div class="operator-guidance"><span>Waiting for the MC?</span><strong id="operator-guidance">Choose a question now. Press Open question only on the MC’s cue.</strong></div>
+          <div class="after-question-actions">
+            <button class="button" data-state="leaderboard" id="show-leaderboard">Show Top 10</button>
+            <button class="button secondary" id="next-clue">Open next clue</button>
+          </div>
+          <details class="secondary-controls operator-safety"><summary>Pause or change the projected screen</summary><div class="toolbar"><button class="button secondary" data-state="paused">Pause everything</button><button class="button secondary" data-state="lobby">Return to welcome screen</button></div></details>
+          <p id="admin-message" class="status-message" aria-live="polite"></p>
+        </section>
+
+        <section class="panel quick-guide" id="quick-guide"><p class="eyebrow">Keep this nearby</p><h2>The whole event in four moves</h2><ol><li>Put <strong>Big screen</strong> on the projector and keep this Admin page private.</li><li>Choose the question while the MC is speaking.</li><li>On the MC’s cue, press <strong>Open question</strong>. The timer closes and reveals the answer automatically.</li><li>Open another question, or press <strong>Show Top 10</strong> when the MC asks.</li></ol><p class="notice"><strong>If unsure, press Pause everything.</strong> It stops the game without deleting answers.</p></section>
+
+        <section class="panel"><details class="admin-details"><summary>Manage words on the live map</summary><p class="muted">Responses appear immediately. Hide only something unsuitable, or edit an obvious spelling mistake.</p><div class="table-scroll"><table><thead><tr><th>Response</th><th>Player</th><th>Status</th><th>Action</th></tr></thead><tbody id="moderation-body"></tbody></table></div><div class="toolbar"><button class="button secondary" id="export-lens">Download responses</button></div></details></section>
+
+        <section class="panel"><details class="admin-details"><summary>Rehearsal and emergency tools</summary><label class="toggle-line"><input type="checkbox" id="rehearsal-mode"><span><strong>Rehearsal mode</strong><small>Use this during practice so test players can be removed safely.</small></span></label><button class="button secondary" id="save-settings">Save rehearsal setting</button><div class="danger-zone"><h3>Use only when necessary</h3><p class="muted">Voiding removes the current question’s points. Clearing removes participant test data. Production reset is permanent.</p><div class="toolbar"><button class="button secondary" id="void-question">Void current question</button><button class="button secondary" id="clear-rehearsal">Clear rehearsal players</button><button class="button danger" id="reset-production">Reset live event data</button><button class="button danger" data-state="ended">End event</button></div></div></details></section>
+      </div>
     </div>
-  </div>
-
-  <div class="admin-layout">
-    
-    <!-- Top Header -->
-    <header class="admin-header">
-      <div class="admin-title-area">
-        <div class="admin-title">
-          <span>Nigeria Mosaic Moderation</span>
-          <span class="status-tag">Live Sync</span>
-        </div>
-        <p class="admin-subtitle">Live real-time attendee submissions stream. Click "Hide" to immediately remove any inappropriate word from the big screen.</p>
-      </div>
-
-      <div class="admin-actions">
-        <a href="display.html" target="_blank" class="btn-action">
-          <span>🖥️ View Display Screen</span>
-        </a>
-        <a href="submit.html" target="_blank" class="btn-action">
-          <span>📱 Open Submit Form</span>
-        </a>
-      </div>
-    </header>
-
-    <!-- Stats Grid -->
-    <section class="stats-grid">
-      <div class="stat-card">
-        <span class="stat-card-num" id="stat-admin-total">0</span>
-        <span class="stat-card-label">Total Submissions</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-card-num emerald" id="stat-admin-active">0</span>
-        <span class="stat-card-label">Live On Screen</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-card-num red" id="stat-admin-hidden">0</span>
-        <span class="stat-card-label">Hidden / Removed</span>
-      </div>
-      <div class="stat-card">
-        <span class="stat-card-num amber" id="stat-admin-flagged">0</span>
-        <span class="stat-card-label">Auto-Flagged (Profanity)</span>
-      </div>
-    </section>
-
-    <!-- Controls & Search -->
-    <section class="controls-bar">
-      <div class="filter-tabs">
-        <button type="button" class="filter-tab active" data-filter="all">All Words</button>
-        <button type="button" class="filter-tab" data-filter="active">Active On Screen</button>
-        <button type="button" class="filter-tab" data-filter="hidden">Hidden</button>
-        <button type="button" class="filter-tab" data-filter="flagged">Flagged</button>
-      </div>
-
-      <input 
-        type="text" 
-        id="search-input" 
-        class="search-input" 
-        placeholder="🔍 Search words or stems..."
-        autocomplete="off"
-      >
-    </section>
-
-    <!-- Response Feed Table -->
-    <section class="table-container">
-      <table class="responses-table">
-        <thead>
-          <tr>
-            <th>Submitted Word</th>
-            <th>Screen Status</th>
-            <th>Time</th>
-            <th>Moderation Action</th>
-          </tr>
-        </thead>
-        <tbody id="responses-tbody">
-          <!-- Populated dynamically via js/admin.js -->
-        </tbody>
-      </table>
-    </section>
-
-  </div>
-
-  <!-- Scripts -->
-  <script src="config.js"></script>
-  <script src="lib/supabase.min.js"></script>
-  <script src="js/stemmer.js"></script>
-  <script src="js/profanity.js"></script>
-  <script src="js/supabase-client.js"></script>
-  <script src="js/admin.js"></script>
-</body>
-</html>
+  </section>
+</main>
+<script src="/config.js"></script><script src="/lib/supabase.min.js"></script><script src="/js/niac-api.js"></script><script src="/js/admin-console.js"></script>
+</body></html>

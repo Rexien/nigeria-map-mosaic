@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Activities — NIAC Live</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body data-page="activities">
+  <div class="shell-bar"></div>
+  <header class="site-header">
+    <a class="brand" href="/"><span class="brand-mark"></span><span>NIAC Live<small>Activity hub</small></span></a>
+    <span>Hello, <strong id="participant-name"></strong></span>
+  </header>
+  <main class="page">
+    <h1>Choose an activity</h1>
+    <p class="theme">The host will let you know which activity is live.</p>
+    <section id="participant-live-card" class="participant-live-card hidden" aria-live="polite">
+      <div class="participant-live-copy">
+        <span id="participant-live-badge" class="participant-live-badge"><i></i><span id="participant-live-badge-text">Live now</span></span>
+        <p id="participant-live-activity" class="participant-live-activity"></p>
+        <h2 id="participant-live-question"></h2>
+        <p id="participant-live-status" class="participant-live-status"></p>
+      </div>
+      <a id="participant-live-link" class="button" href="/play">Answer now</a>
+    </section>
+    <section class="activities">
+      <a class="activity" href="/lens"><b>Nigeria Through Your Lens</b><p>Share one positive word or short phrase for the live Nigeria mosaic.</p><span>Share your lens</span></a>
+      <a class="activity" href="/play"><b>Naija Passport Challenge</b><p>Play the cumulative Day 1 and Day 2 live trivia competition.</p><span>Join live trivia</span></a>
+      <a class="activity" href="/play"><b>Decode the State</b><p>Lock your answer as three clues progressively reveal a Nigerian state.</p><span>Play the current round</span></a>
+    </section>
+    <p><a href="/passport">View my passport and scores</a></p>
+  </main>
+  <script src="/config.js"></script><script src="/js/core.js"></script><script src="/js/niac-api.js"></script><script src="/js/app.js"></script>
+</body>
+</html>

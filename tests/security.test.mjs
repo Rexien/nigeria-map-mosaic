@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+const migration=await readFile(new URL('../supabase/migrations/202609090001_niac_live.sql',import.meta.url),'utf8');
+const api=await readFile(new URL('../netlify/functions/api.mjs',import.meta.url),'utf8');
+const config=await readFile(new URL('../config.js',import.meta.url),'utf8');
+const netlify=await readFile(new URL('../netlify.toml',import.meta.url),'utf8');
+test('legacy anonymous mutation policies are removed',()=>{assert.match(migration,/drop policy if exists "Allow public update moderation"/);assert.match(migration,/enable row level security/)});
+test('admin operations require server-verified authorization',()=>{assert.match(api,/verifyAdmin/);assert.match(api,/route\.startsWith\('admin\/'\)/)});
+test('admin credentials and service role are not in browser config',()=>{assert.doesNotMatch(config,/ADMIN_PIN|SERVICE_ROLE|password/i)});
+test('answer RPC uses a server timestamp and database uniqueness',()=>{assert.match(migration,/clock_timestamp\(\) > s\.deadline_at/);assert.match(migration,/unique\(participant_id, question_id\)/)});
+test('pending lens responses are excluded from public projection',()=>{assert.match(migration,/where status='approved'/);assert.match(api,/status=eq\.approved/)});
+test('fact-check files and migrations are blocked from the deployed public surface',()=>{assert.match(netlify,/from = "\/content\/\*"[\s\S]*status = 404/);assert.match(netlify,/from = "\/supabase\/\*"[\s\S]*status = 404/)});
+test('question edits are authenticated, validated, and audited',()=>{assert.match(api,/route==='admin\/question'/);assert.match(api,/update_question/);assert.match(api,/options\.length!==4/);assert.match(api,/This question is being shown now/)});

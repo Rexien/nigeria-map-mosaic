@@ -302,8 +302,8 @@
 
     // Scale sizing so few words fill early, many words fit late
     if (totalGroups <= 6) {
-      minFontSize = 38;
-      maxFontSize = 120;
+      minFontSize = 30;
+      maxFontSize = 76;
     } else if (totalGroups <= 15) {
       minFontSize = 28;
       maxFontSize = 95;
