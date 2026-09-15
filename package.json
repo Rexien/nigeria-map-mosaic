@@ -8,7 +8,8 @@
     "test": "node --test",
     "serve": "npx netlify dev",
     "content:import": "node scripts/import-content.mjs",
-    "load": "k6 run load/answer-spike.js"
+    "load": "k6 run load/answer-spike.js",
+    "rehearsal:baseline": "node scripts/rehearsal-baseline.mjs"
   },
   "engines": { "node": ">=20" }
 }
