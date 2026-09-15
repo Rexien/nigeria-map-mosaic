@@ -7,7 +7,8 @@ import { computeScoresAndRanks, generateSnapshots, executeRevealBarrier } from '
 import { MetricsAggregator, getCapacityConfig } from '../lib/telemetry.mjs';
 
 const TIER = process.argv[2] ? Number(process.argv[2]) : 500;
-const VALID_TIERS = [100, 500, 1000, 2500];
+const VALID_TIERS = [100, 500, 1000, 2500, 3000];
+const MAX_ACTIVE_PLAYERS = Number(process.env.MAX_ACTIVE_PLAYERS || 1500);
 
 if (!VALID_TIERS.includes(TIER)) {
   console.log(`[Rehearsal Ladder] Specified tier ${TIER} not standard. Using nearest or default.`);
@@ -32,7 +33,7 @@ async function runLadderTier(participantCount) {
   const credentials = [];
 
   for (let i = 1; i <= participantCount; i++) {
-    const isSpectator = i > 1500; // Capacity threshold simulation
+    const isSpectator = i > MAX_ACTIVE_PLAYERS;
     const p = {
       id: `p-${i}`,
       alias: `Player_${i}`,

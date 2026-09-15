@@ -21,7 +21,8 @@ const TIERS = {
   '100': { vus: 100, duration: '60s' },
   '500': { vus: 500, duration: '90s' },
   '1000': { vus: 1000, duration: '120s' },
-  '2500': { vus: 2500, duration: '180s' }
+  '2500': { vus: 2500, duration: '180s' },
+  '3000': { vus: 3000, duration: '180s' }
 };
 
 const selectedTier = TIERS[TIER] || TIERS['1000'];

@@ -9,7 +9,8 @@
     "serve": "npx netlify dev",
     "content:import": "node scripts/import-content.mjs",
     "load": "k6 run load/answer-spike.js",
-    "rehearsal:baseline": "node scripts/rehearsal-baseline.mjs"
+    "rehearsal:baseline": "node scripts/rehearsal-baseline.mjs",
+    "rehearsal:gateway": "node scripts/gateway-http-rehearsal.mjs"
   },
   "engines": { "node": ">=20" }
 }

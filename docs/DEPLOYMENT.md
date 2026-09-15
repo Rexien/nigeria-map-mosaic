@@ -23,6 +23,14 @@ Deploy the feature branch to a preview first. Exercise join, recovery, pending m
 
 ## Load test
 
+For a repeatable local HTTP rehearsal of the gateway across a normal 20-second question window:
+
+```text
+node scripts/gateway-http-rehearsal.mjs 3000
+```
+
+Set `ANSWER_WINDOW_MS=0` only for a deliberately unrealistic same-millisecond socket burst. Local operating-system socket limits can fail that test before requests reach the gateway, so it is not a replacement for the hosted k6 rehearsal.
+
 With k6 installed and a rehearsal question open:
 
 ```text

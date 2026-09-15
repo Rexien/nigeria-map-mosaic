@@ -52,6 +52,7 @@ test('multi-tier rehearsal ladder k6 script defines calibrated testing tiers and
   assert.match(content, /'500':/);
   assert.match(content, /'1000':/);
   assert.match(content, /'2500':/);
+  assert.match(content, /'3000':/);
   assert.match(content, /answer_ack_latency_ms/);
   assert.match(content, /dropped_answers_total/);
   assert.match(content, /snapshot_lookup_latency_ms/);

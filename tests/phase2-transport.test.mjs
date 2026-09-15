@@ -233,13 +233,13 @@ test('gateway server handles real HTTP SSE streams, health checks, and broadcast
   resetClients();
 });
 
-test('2,500-client fanout gate: all clients receive broadcast within 2s with 0 DB reads', async () => {
+test('3,000-client fanout gate: all clients receive broadcast within 2s with 0 DB reads', async () => {
   resetClients();
-  const CLIENT_COUNT = 2500;
+  const CLIENT_COUNT = 3000;
   const clientReceivedTimes = new Map();
   let dbQueriesExecuted = 0; // In-memory broadcast path must never touch database
 
-  // Register 2,500 client streams into gateway SSE pool
+  // Register 3,000 client streams into gateway SSE pool
   for (let i = 0; i < CLIENT_COUNT; i++) {
     const clientId = i;
     const mockClientStream = new Writable({
@@ -254,18 +254,18 @@ test('2,500-client fanout gate: all clients receive broadcast within 2s with 0 D
     sseClients.add(mockClientStream);
   }
 
-  assert.equal(sseClients.size, CLIENT_COUNT, 'Must have 2,500 registered client sinks');
+  assert.equal(sseClients.size, CLIENT_COUNT, 'Must have 3,000 registered client sinks');
 
   // Prepare broadcast envelope
   const envelope = createStateEnvelope({
-    sessionId: 'session-fanout-2500',
+    sessionId: 'session-fanout-3000',
     version: 77,
     state: 'open',
     responseCount: 0
   }, {
     id: 'fanout-gate-q',
     category: 'geography',
-    question: 'How fast can NIAC Live broadcast to 2,500 devices?',
+    question: 'How fast can NIAC Live broadcast to 3,000 devices?',
     options: ['<50ms', '<100ms', '<500ms', '<2s']
   });
 
