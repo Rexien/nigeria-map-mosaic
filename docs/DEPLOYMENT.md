@@ -3,7 +3,7 @@
 ## Before deployment
 
 1. Create a staging Supabase project or a database backup/restore point.
-2. Run the legacy `schema.sql` only for a new database, then apply `supabase/migrations/202609090001_niac_live.sql` through the Supabase migration workflow.
+2. Run the legacy `schema.sql` only for a new database, then apply `supabase/migrations/202609090001_niac_live.sql` and `supabase/migrations/202609140001_snapshot_scoring.sql` in order through the Supabase migration workflow.
 3. Rotate the previously committed anon key after the migration closes the legacy policies.
 4. Create event-team users in Supabase Auth, then insert their UUIDs into `admin_users`. Grant the smallest suitable role.
 5. Run `node scripts/import-content.mjs` to import the supplied JSON as blocked draft content. A human reviewer must replace each placeholder source and set `review_status='approved'` before use.
@@ -11,7 +11,13 @@
 
 ## Netlify environment
 
-Set the variables listed in `.env.example`. `SUPABASE_SERVICE_ROLE_KEY` and `PARTICIPANT_TOKEN_PEPPER` must exist only in Netlify’s encrypted server environment. They must never be added to `config.js`.
+Set the variables listed in `.env.example`. `SUPABASE_SERVICE_ROLE_KEY`, `PARTICIPANT_TOKEN_PEPPER` and `GATEWAY_ADMIN_SECRET` must exist only in encrypted server environments. They must never be added to `config.js`.
+
+On Netlify, set `PUBLIC_GATEWAY_URL` to the public Caddy gateway URL and use the same `GATEWAY_ADMIN_SECRET` as the Oracle VM. On the Oracle VM, set `AUTHORITY_BASE_URL` to the Netlify site URL, `PUBLIC_APP_ORIGIN` to the public participant-site origin, and both credential secrets. The gateway polls the authority every two seconds so the deadline transition still happens when all audience clients are on SSE.
+
+## Oracle gateway
+
+Copy the repository and production environment file to the VM, then use either `gateway/docker-compose.yml` or `gateway/systemd/niac-gateway.service`. Do not run both. Keep port 3000 bound to loopback; Caddy is the only public listener. Verify `/gateway/health` reports `durableSinkConfigured: true`, queue depth zero and a green capacity state before opening the roster.
 
 Deploy the feature branch to a preview first. Exercise join, recovery, pending moderation, one correct/incorrect/late/duplicate answer, reveal, leaderboard, pause/resume and both displays. Then run the rehearsal load test. Promote the immutable tested deploy to production and attach the final custom domain.
 
