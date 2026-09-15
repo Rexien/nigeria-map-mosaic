@@ -23,6 +23,30 @@
     adminStatus=status;const state=status.session?.state||'lobby',activity=status.settings?.active_activity||'lens';
     $('#admin-name').textContent=status.admin.displayName;$('#admin-participants').textContent=status.metrics.participants;$('#admin-responses').textContent=status.metrics.responseCount;
     $('#live-state').textContent=activity==='lens'?'Map is live':states[state]||state;$('#screen-activity').textContent=activityNames[activity];$('#run-mode').textContent=status.settings?.rehearsal_mode?'Practice':'Live';
+    if(status.capacity){
+      const c=status.capacity,badge=$('#capacity-badge'),desc=$('#capacity-status-desc');
+      if(badge){badge.className=`capacity-badge ${c.status}`;badge.textContent=c.status==='green'?'GREEN · Healthy':c.status==='amber'?'AMBER · Degraded':'RED · Overloaded';}
+      if(desc)desc.textContent=c.statusReason||'System capacity normal.';
+      const ack=$('#metric-ack-time'),q=$('#metric-queue-depth'),err=$('#metric-error-rate'),lag=$('#metric-loop-lag');
+      if(ack)ack.textContent=`${c.p50AckMs}ms / ${c.p95AckMs}ms`;
+      if(q)q.textContent=String(c.queueDepth);
+      if(err)err.textContent=`${c.errorRatePercent}%`;
+      if(lag)lag.textContent=`${c.eventLoopLagMs}ms`;
+    }
+    if(status.metrics){
+      const active = status.metrics.activeCount ?? status.metrics.participants ?? 0;
+      const spectators = status.metrics.spectatorCount ?? 0;
+      const elActive = $('#metric-active-count'), elSpec = $('#metric-spectator-count');
+      if(elActive) elActive.textContent = String(active);
+      if(elSpec) elSpec.textContent = String(spectators);
+      const freezeBtn = $('#btn-toggle-freeze'), rosterText = $('#roster-status-text');
+      const isFrozen = Boolean(status.metrics.rosterFrozen);
+      if(freezeBtn) freezeBtn.textContent = isFrozen ? 'Unfreeze roster' : 'Freeze roster';
+      if(rosterText){
+        rosterText.textContent = isFrozen ? 'Roster: Frozen (Spectator active)' : 'Roster: Open';
+        rosterText.classList.toggle('frozen', isFrozen);
+      }
+    }
     let instruction=guidance[state]||'Check the big screen before continuing.';const deadline=status.session?.deadline_at||status.session?.deadlineAt;if(state==='open'&&deadline){const seconds=Math.max(0,Math.ceil((new Date(deadline).getTime()-Date.now())/1000));instruction=`Question live · ${seconds}s remaining · ${status.metrics.responseCount} answers received.`}$('#operator-guidance').textContent=instruction;$('#rehearsal-mode').checked=Boolean(status.settings?.rehearsal_mode);
     $$('[name="active-activity"]').forEach(input=>input.checked=input.value===activity);$('#quiz-controls').classList.toggle('hidden',activity==='lens');$('#next-clue').classList.toggle('hidden',activity!=='decode');
     $$('[data-state]').forEach(button=>{button.disabled=!transitions[state]?.includes(button.dataset.state)});
@@ -45,6 +69,7 @@
     $('#next-clue').onclick=event=>perform({kind:'next_clue'},'The next clue is now showing.',event.currentTarget);
     $('#save-settings').onclick=()=>changeActivity($('[name="active-activity"]:checked')?.value||'lens');
     $('#void-question').onclick=()=>{if(confirm('Void this question and remove its points from every score?'))perform({kind:'void_question'},'Question voided and scores corrected.')};
+    $('#btn-toggle-freeze')?.addEventListener('click',event=>perform({kind:'toggle_roster_freeze'},'Roster status updated.',event.currentTarget));
     $('#clear-rehearsal').onclick=()=>clearData('rehearsal','CLEAR REHEARSAL DATA');$('#reset-production').onclick=()=>clearData('production','RESET NIAC 2026 PRODUCTION DATA');
     await loadModeration();setInterval(()=>refreshStatus().catch(()=>{}),1500);
   }

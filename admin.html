@@ -15,6 +15,30 @@
       <div class="admin-workspace">
         <div class="score-strip admin-stats"><div><span>People joined</span><strong id="admin-participants">0</strong></div><div><span>Answers received</span><strong id="admin-responses">0</strong></div><div><span>Screen activity</span><strong id="screen-activity">—</strong></div><div><span>Run mode</span><strong id="run-mode">—</strong></div></div>
 
+        <section class="panel capacity-panel" id="capacity-panel">
+          <div class="capacity-header">
+            <div>
+              <span class="capacity-badge green" id="capacity-badge">GREEN · Normal</span>
+              <h2>Capacity &amp; live health</h2>
+            </div>
+            <div class="capacity-controls">
+              <span class="roster-status" id="roster-status-text">Roster: Open</span>
+              <button class="button secondary compact" id="btn-toggle-freeze">Freeze roster</button>
+            </div>
+          </div>
+          <span class="capacity-status-desc" id="capacity-status-desc">All ingestion queues and latency metrics are normal.</span>
+          <div class="score-strip capacity-metrics">
+            <div><span>p50 / p95 ack</span><strong id="metric-ack-time">0ms / 0ms</strong></div>
+            <div><span>Queue depth</span><strong id="metric-queue-depth">0</strong></div>
+            <div><span>Error rate</span><strong id="metric-error-rate">0.0%</strong></div>
+            <div><span>Loop lag</span><strong id="metric-loop-lag">0ms</strong></div>
+          </div>
+          <div class="capacity-roster-breakdown">
+            <span>Contestants: <strong id="metric-active-count">0</strong></span>
+            <span>Spectators: <strong id="metric-spectator-count">0</strong></span>
+          </div>
+        </section>
+
         <section class="panel operator-panel">
           <div class="section-heading"><div><span class="step-number">1</span><h2>Choose what appears on the big screen</h2></div><p>The projector changes automatically when you choose an activity.</p></div>
           <div class="screen-options" id="activity-options">

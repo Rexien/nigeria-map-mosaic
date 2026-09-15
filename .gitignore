@@ -15,3 +15,7 @@ node_modules/
 .env
 .netlify/
 .local-data/
+data/
+*.db
+*.db-wal
+*.db-shm

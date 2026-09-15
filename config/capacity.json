@@ -1,0 +1,11 @@
+{
+  "testPlayers": 500,
+  "maxActivePlayers": 1500,
+  "queueDepthLimit": 1000,
+  "ackTimeoutMs": 2000,
+  "drainTimeoutMs": 3000,
+  "greenQueueMax": 200,
+  "amberQueueMax": 800,
+  "amberP95AckMs": 1000,
+  "redP95AckMs": 2000
+}

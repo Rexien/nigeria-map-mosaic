@@ -1,0 +1,21 @@
+[Unit]
+Description=NIAC Live High-Capacity Broadcast & Ingestion Gateway
+After=network.target
+Documentation=https://github.com/Rexien/nigeria-map-mosaic
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/var/www/niac-live
+ExecStart=/usr/bin/node gateway/server.mjs
+Restart=always
+RestartSec=3
+EnvironmentFile=/var/www/niac-live/.env.production
+LimitNOFILE=65536
+ProtectSystem=full
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=niac-gateway
+
+[Install]
+WantedBy=multi-user.target

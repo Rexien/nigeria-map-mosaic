@@ -1,3 +1,5 @@
+import { createReadCache } from './_traffic.mjs';
+const eventReads=createReadCache();
 const base = () => process.env.SUPABASE_URL;
 const key = () => process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -19,11 +21,13 @@ export async function db(path, options = {}) {
   return body;
 }
 
-export async function event() {
+async function loadEvent() {
   const rows = await db('events?slug=eq.niac-2026&select=*');
   if (!rows[0]) throw Object.assign(new Error('Event is not configured'), { status: 503 });
   return rows[0];
 }
+
+export function event(){return eventReads.get('event',30000,loadEvent)}
 
 export async function verifyAdmin(authHeader) {
   const token = String(authHeader || '').replace(/^Bearer\s+/i, '');

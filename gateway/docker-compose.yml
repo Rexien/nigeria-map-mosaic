@@ -1,0 +1,54 @@
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: gateway/Dockerfile
+    container_name: niac-live-gateway
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - GATEWAY_PORT=3000
+      - NODE_ENV=production
+      - GATEWAY_ADMIN_SECRET=${GATEWAY_ADMIN_SECRET}
+      - CREDENTIAL_SECRET_ACTIVE=${CREDENTIAL_SECRET_ACTIVE}
+      - CREDENTIAL_SECRET_PREVIOUS=${CREDENTIAL_SECRET_PREVIOUS:-}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - PUBLIC_APP_ORIGIN=${PUBLIC_APP_ORIGIN}
+      - AUTHORITY_BASE_URL=${AUTHORITY_BASE_URL}
+      - AUTHORITY_POLL_MS=${AUTHORITY_POLL_MS:-2000}
+    volumes:
+      - gateway-data:/app/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1024M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: niac-live-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - GATEWAY_DOMAIN=${GATEWAY_DOMAIN}
+    depends_on:
+      - gateway
+
+volumes:
+  gateway-data:
+    name: niac-gateway-data
+  caddy-data:
+    name: niac-caddy-data
+  caddy-config:
+    name: niac-caddy-config
