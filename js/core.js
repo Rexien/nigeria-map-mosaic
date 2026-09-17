@@ -15,8 +15,8 @@
     open: ['locked', 'paused'],
     submitted: ['locked', 'paused'],
     locked: ['revealed', 'paused'],
-    revealed: ['leaderboard', 'preparing', 'round_complete', 'paused'],
-    leaderboard: ['preparing', 'round_complete', 'paused'],
+    revealed: ['leaderboard', 'preparing', 'round_complete', 'paused', 'lobby'],
+    leaderboard: ['preparing', 'round_complete', 'paused', 'lobby'],
     round_complete: ['lobby', 'ended'],
     paused: ['lobby', 'preparing', 'open', 'locked', 'revealed', 'leaderboard', 'ended'],
     ended: ['lobby']

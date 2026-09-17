@@ -18,7 +18,7 @@ const publicReads=createReadCache(),rankingReads=createReadCache();
 const rateLimit=createRateLimiter();
 const clientIp=e=>e.headers?.['x-nf-client-connection-ip']||e.headers?.['x-forwarded-for']||'local';
 const gatewayBase=()=>String(process.env.PUBLIC_GATEWAY_URL||'').replace(/\/$/,'');
-const transitions={lobby:['preparing','paused','ended'],preparing:['open','paused','ended'],open:['locked','paused'],locked:['revealed','paused'],revealed:['leaderboard','preparing','round_complete','paused'],leaderboard:['preparing','round_complete','paused'],round_complete:['lobby','ended'],paused:['lobby','preparing','open','locked','revealed','leaderboard','ended'],ended:['lobby']};
+const transitions={lobby:['preparing','paused','ended'],preparing:['open','paused','ended'],open:['locked','paused'],locked:['revealed','paused'],revealed:['leaderboard','preparing','round_complete','paused','lobby'],leaderboard:['preparing','round_complete','paused','lobby'],round_complete:['lobby','ended'],paused:['lobby','preparing','open','locked','revealed','leaderboard','ended'],ended:['lobby']};
 async function dbAll(path){const rows=[];for(let offset=0;;offset+=1000){const page=await db(`${path}${path.includes('?')?'&':'?'}limit=1000&offset=${offset}`);rows.push(...page);if(page.length<1000)return rows}}
 async function computeAndPersistSnapshots(sessionId, version){
     const session=(await db(`live_sessions?id=eq.${sessionId}&select=event_id`))[0];
