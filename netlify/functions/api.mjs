@@ -282,6 +282,11 @@ async function adminAction(e,admin){ const ev=await event(); const b=JSON.parse(
   }
   const session=await autoRevealSession((await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`))[0]);
   if(!session)return json(409,{error:'Create a live session in Supabase first.'});
+  if(b.kind==='show_welcome'){
+    const after=(await db(`live_sessions?id=eq.${session.id}`,{method:'PATCH',body:JSON.stringify({state:'lobby',current_question_id:null,current_round_id:null,opened_at:null,deadline_at:null,updated_at:new Date().toISOString(),version:session.version+1})}))[0];
+    await audit(admin,ev,'show_welcome','live_session',session.id,session,after);
+    return json(200,{session:after});
+  }
   if(b.kind==='open_question'){
     const q=(await db(`quiz_questions?id=eq.${b.questionId}&review_status=eq.approved&is_void=eq.false&select=id,round_id,duration_seconds,quiz_rounds!inner(quiz_games!inner(activity))`))[0];
     if(!q)return json(422,{error:'Only approved, non-void questions can be opened.'});

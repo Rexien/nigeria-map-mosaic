@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Event control — NIAC Live</title><link rel="stylesheet" href="/css/app.css">
+  <title>Event control — NIAC Live</title><link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="stylesheet" href="/css/app.css">
 </head>
 <body data-page="admin-console"><div class="shell-bar"></div>
 <header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span>NIAC Live<small>Event control</small></span></a><div class="header-links"><a href="/" target="_blank">Participant page</a><a class="button compact" href="/display" target="_blank">Open big screen</a></div></header>
@@ -42,6 +42,7 @@
         <section class="panel operator-panel">
           <div class="section-heading"><div><span class="step-number">1</span><h2>Choose what appears on the big screen</h2></div><p>The projector changes automatically when you choose an activity.</p></div>
           <div class="screen-options" id="activity-options">
+            <label><input type="radio" name="active-activity" value="lobby"><span><strong>Welcome screen</strong><small>Large QR code &amp; join instructions.</small></span></label>
             <label><input type="radio" name="active-activity" value="lens"><span><strong>Live Nigeria map</strong><small>Words and phrases appear inside the map.</small></span></label>
             <label><input type="radio" name="active-activity" value="passport"><span><strong>Passport trivia</strong><small>Questions, answers and the combined scores.</small></span></label>
             <label><input type="radio" name="active-activity" value="decode"><span><strong>Decode the State</strong><small>Reveal one clue at a time.</small></span></label>
