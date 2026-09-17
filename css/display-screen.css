@@ -186,16 +186,24 @@ body { background-image: linear-gradient(rgba(0, 135, 83, .035) 1px, transparent
   display: block;
 }
 
-/* Decode Projector Layout */
+/* Decode Projector Layout: 3-column widescreen grid ensuring all content fits within 100vh */
 .display-question.is-decode {
-  grid-template-columns: minmax(360px, 1fr) minmax(340px, 1fr);
+  grid-template-columns: minmax(280px, 340px) minmax(360px, 1.3fr) minmax(280px, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   grid-template-areas:
-    "header header"
-    "question timer"
-    "map options"
-    "clues clues"
-    "explanation explanation"
-    "footer footer";
+    "header header header"
+    "question question timer"
+    "clues map options"
+    "explanation explanation explanation"
+    "footer footer footer";
+  gap: clamp(8px, 1.2vh, 14px) clamp(14px, 1.6vw, 28px);
+  padding: clamp(22px, 3vh, 38px) clamp(36px, 4vw, 64px) clamp(20px, 2.8vh, 34px);
+  align-content: stretch;
+}
+.display-question.is-decode h1 {
+  font-size: clamp(1.6rem, 2.5vw, 2.6rem);
+  margin: 0;
+  align-self: center;
 }
 .display-map-card {
   grid-area: map;
@@ -204,28 +212,33 @@ body { background-image: linear-gradient(rgba(0, 135, 83, .035) 1px, transparent
   justify-content: center;
   align-items: center;
   min-height: 0;
+  height: 100%;
 }
 .display-map-card .nigeria-map-wrapper {
   margin: 0;
+  width: 100%;
   max-width: 100%;
-  max-height: clamp(240px, 40vh, 460px);
-  padding: 8px;
+  max-height: clamp(260px, 52vh, 480px);
+  padding: 4px;
 }
 .display-clues-strip {
   grid-area: clues;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  gap: clamp(8px, 1.2vh, 14px);
+  min-height: 0;
 }
 .display-clue-card {
   border: 2px solid var(--forest);
-  background: rgba(255, 254, 249, 0.95);
+  background: rgba(255, 254, 249, 0.96);
   border-radius: 8px;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 4px 4px 0 var(--gold);
+  display: grid;
+  grid-template-columns: clamp(90px, 8vw, 120px) 1fr;
+  align-items: center;
+  box-shadow: 3px 3px 0 var(--gold);
+  min-height: 0;
 }
 .display-clue-card.is-active {
   border-color: var(--gold);
@@ -233,7 +246,8 @@ body { background-image: linear-gradient(rgba(0, 135, 83, .035) 1px, transparent
 }
 .display-clue-img-wrap {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  height: 100%;
+  min-height: clamp(65px, 9vh, 95px);
   background: #0d1e15;
   overflow: hidden;
 }
@@ -243,12 +257,33 @@ body { background-image: linear-gradient(rgba(0, 135, 83, .035) 1px, transparent
   object-fit: cover;
   display: block;
 }
-.display-clue-info {
-  padding: 6px 10px;
-  font-size: clamp(0.75rem, 0.95vw, 1.1rem);
+.display-clue-info,
+.display-clue-text {
+  padding: clamp(6px, 1vh, 10px) clamp(8px, 1vw, 14px);
+  font-size: clamp(0.76rem, 0.88vw, 1rem);
+  line-height: 1.3;
   color: var(--forest);
-  font-weight: 700;
-  background: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+.display-clue-text strong {
+  display: block;
+  font-size: 0.95em;
+  color: var(--flag);
+  margin-bottom: 2px;
+}
+.display-question.is-decode .display-options {
+  grid-area: options;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  gap: clamp(6px, 1vh, 12px);
+  margin: 0;
+  min-height: 0;
+}
+.display-question.is-decode .display-option {
+  min-height: clamp(48px, 7vh, 68px);
+  padding: clamp(6px, 1vh, 12px) clamp(12px, 1.2vw, 18px);
+  font-size: clamp(1rem, 1.4vw, 1.6rem);
 }
 
 
