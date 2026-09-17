@@ -1,0 +1,21 @@
+.review-page{background:var(--chalk)}
+.review-main{max-width:1660px;margin:auto;padding:28px clamp(16px,3vw,48px) 36px}
+.review-heading{display:flex;justify-content:space-between;gap:24px;align-items:center;margin-bottom:20px}
+.review-heading h1{font-family:var(--display);font-size:clamp(2rem,3vw,3.4rem);letter-spacing:-.05em;margin:0;color:var(--palm)}
+.review-heading p{max-width:72ch;line-height:1.5;margin:9px 0}
+.review-safety{max-width:240px!important;color:var(--muted);font-size:.9rem}
+.review-label{color:var(--palm);font-weight:800;font-size:.85rem}
+.review-controls{display:flex;align-items:end;flex-wrap:wrap;gap:14px;padding:16px 0 22px;border-bottom:2px solid var(--palm)}
+.review-controls label{display:grid;gap:7px;font-weight:750;min-width:0}
+.review-controls label:first-child{flex:1 1 330px}
+.review-controls select{max-width:100%;width:100%;padding:12px 10px;border:1px solid var(--palm);border-radius:5px;background:white;color:var(--ink);min-height:46px}
+.review-nav{display:flex;gap:8px}.review-nav .button{padding:10px;min-height:46px}
+.review-previews{display:grid;grid-template-columns:minmax(270px,390px) minmax(0,1fr);gap:30px;margin-top:22px;align-items:start}
+.preview-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+.preview-heading h2{font-size:1.1rem;margin:0}.preview-heading a{font-size:.85rem}
+.scaled-stage{position:relative;width:100%;overflow:hidden;background:var(--paper);border:1px solid var(--line)}
+.scaled-stage iframe{position:absolute;inset:0;border:0;transform-origin:top left;background:var(--paper)}
+.review-hint,.review-footer{color:var(--muted);font-size:.9rem;line-height:1.5}
+.editorial{padding:10px 0}.editorial h3{color:var(--palm);font-size:1.2rem}.editorial p{line-height:1.5;max-width:75ch}
+.review-details{margin-top:20px}#comparison{display:grid;grid-template-columns:1fr 1fr;gap:30px;line-height:1.6}#comparison>div{min-width:0}#comparison a{overflow-wrap:anywhere}
+@media(max-width:900px){.review-previews{grid-template-columns:1fr}.preview-phone{max-width:430px;width:100%;margin:auto}.review-heading{display:block}.review-safety{max-width:none!important}.review-controls label{flex:1 1 180px}.review-label{max-width:150px;text-align:right}#comparison{grid-template-columns:1fr}.review-nav .button{width:auto}}

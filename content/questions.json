@@ -1,30 +1,527 @@
 {
-  "notice": "REQUIRES HUMAN FACT CHECK",
-  "defaults": { "durationSeconds": 20, "points": 1000, "speedBonus": false, "optionsRequired": 4 },
+  "notice": "Vetted SCIN Independence Day Passport Trivia 2026",
+  "defaults": {
+    "durationSeconds": 20,
+    "points": 1000,
+    "speedBonus": false,
+    "optionsRequired": 4
+  },
   "questions": [
-    {"day":1,"category":"Food","order":1,"question":"Which ingredient is commonly used to make moi moi?","options":["Beans","Cassava","Yam","Plantain"],"correctOption":0,"explanation":"Moi moi is a steamed bean pudding.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":1,"category":"Food","order":2,"question":"Which soup is commonly prepared with ground melon seeds?","options":["Egusi soup","Pepper soup","Banga soup","Afang soup"],"correctOption":0,"explanation":"Egusi refers to protein-rich melon seeds used in the soup.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":1,"category":"Food","order":3,"question":"Suya is most closely associated with which cooking method?","options":["Grilling","Steaming","Boiling","Baking"],"correctOption":0,"explanation":"Suya is seasoned meat cooked over a grill.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":1,"category":"Language","order":4,"question":"In Nigerian Pidgin, what does “How far?” commonly mean?","options":["How are things?","How distant?","What time is it?","Where are you?"],"correctOption":0,"explanation":"It is a common informal greeting.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":1,"category":"Language","order":5,"question":"Which word is widely used in Nigeria to mean “well done”?","options":["Kudos","Sannu","Nnoo","E ku ise"],"correctOption":3,"explanation":"The Yoruba phrase “E ku ise” is used to acknowledge someone at work.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":1,"category":"Language","order":6,"question":"What does “abeg” commonly express in Nigerian Pidgin?","options":["Please","Tomorrow","Quickly","Welcome"],"correctOption":0,"explanation":"“Abeg” is commonly used for “please” or an appeal.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":1,"category":"Everyday Nigeria","order":7,"question":"Which colour appears twice on Nigeria’s national flag?","options":["Green","White","Red","Yellow"],"correctOption":0,"explanation":"The flag has green, white and green vertical bands.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":1,"category":"Everyday Nigeria","order":8,"question":"What is the name of Nigeria’s currency?","options":["Naira","Cedi","Rand","Shilling"],"correctOption":0,"explanation":"Nigeria’s currency is the naira.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":1,"category":"Everyday Nigeria","order":9,"question":"Nigeria’s international calling code begins with which number?","options":["+234","+233","+254","+27"],"correctOption":0,"explanation":"Nigeria’s country calling code is +234.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Food","order":1,"question":"Akara is primarily made from which ingredient?","options":["Beans","Rice","Maize","Cocoyam"],"correctOption":0,"explanation":"Akara is a fritter made from bean paste.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Food","order":2,"question":"Which leaf gives ofada sauce one of its common names?","options":["Ayamase","Ugwu","Bitter leaf","Scent leaf"],"correctOption":0,"explanation":"The green pepper sauce is often called ayamase.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Food","order":3,"question":"Zobo drink is commonly made from which plant?","options":["Hibiscus","Ginger","Cocoa","Coffee"],"correctOption":0,"explanation":"The drink is brewed from dried hibiscus calyces.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Language","order":4,"question":"Which phrase commonly means “welcome” in Hausa?","options":["Sannu da zuwa","Bawo ni","Kedu","Wa zo bia"],"correctOption":0,"explanation":"“Sannu da zuwa” is a Hausa welcome.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Language","order":5,"question":"What does “no wahala” commonly mean?","options":["No problem","No food","No journey","No noise"],"correctOption":0,"explanation":"It commonly means there is no problem or worry.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Language","order":6,"question":"Which greeting is commonly associated with Igbo?","options":["Ndewo","Bawo ni","Sannu","Koyo"],"correctOption":0,"explanation":"“Ndewo” is a common Igbo greeting.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Entertainment","order":7,"question":"Nollywood is the popular name for which industry?","options":["Nigerian film","Nigerian fashion","Nigerian radio","Nigerian publishing"],"correctOption":0,"explanation":"Nollywood refers to Nigeria’s film industry.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Entertainment","order":8,"question":"Afrobeats is best described as what?","options":["A contemporary music umbrella","A board game","A textile pattern","A wrestling style"],"correctOption":0,"explanation":"Afrobeats describes contemporary pop sounds with roots across West Africa.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Entertainment","order":9,"question":"The talking drum changes pitch mainly through what action?","options":["Squeezing its cords","Heating its skin","Adding water","Turning a key"],"correctOption":0,"explanation":"Tension cords let a player vary the drumhead tension and pitch.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Geography","order":10,"question":"Which ocean lies south of Nigeria?","options":["Atlantic Ocean","Indian Ocean","Pacific Ocean","Arctic Ocean"],"correctOption":0,"explanation":"Nigeria’s coastline meets the Gulf of Guinea in the Atlantic.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Geography","order":11,"question":"Which city is Nigeria’s federal capital?","options":["Abuja","Lagos","Kano","Port Harcourt"],"correctOption":0,"explanation":"Abuja is the Federal Capital Territory and national capital.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Geography","order":12,"question":"The Niger and Benue rivers meet near which city?","options":["Lokoja","Ibadan","Maiduguri","Abeokuta"],"correctOption":0,"explanation":"The rivers meet at Lokoja.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Everyday Nigeria","order":13,"question":"How many vertical bands are on Nigeria’s flag?","options":["Three","Two","Four","Five"],"correctOption":0,"explanation":"The flag has three equal vertical bands.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Everyday Nigeria","order":14,"question":"Which month contains Nigeria’s Independence Day?","options":["October","May","June","December"],"correctOption":0,"explanation":"Independence Day is observed on 1 October.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"},
-    {"day":2,"category":"Everyday Nigeria","order":15,"question":"Which side of the road do vehicles drive on in Nigeria?","options":["Right","Left","Either side","Centre"],"correctOption":0,"explanation":"Nigeria uses right-hand traffic.","source":"REQUIRES HUMAN FACT CHECK — organiser to add source","reviewStatus":"requires_fact_check"}
+    {
+      "day": 1,
+      "category": "Language",
+      "order": 1,
+      "question": "In Nigerian Pidgin, what does “How far?” commonly mean?",
+      "options": [
+        "How distant is it?",
+        "How are things?",
+        "Where are you going?",
+        "What time is it?"
+      ],
+      "correctOption": 1,
+      "explanation": "“How far?” is commonly used as an informal greeting or a way of asking how things are going.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Keep the wording and answer options. Prioritise a clear question and a short explanation.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 1,
+      "category": "Food and Drink",
+      "order": 2,
+      "question": "Zobo is traditionally made from the dried flower calyces of which plant?",
+      "options": [
+        "Tamarind",
+        "Cocoa",
+        "Ginger",
+        "Hibiscus"
+      ],
+      "correctOption": 3,
+      "explanation": "Zobo is brewed from dried hibiscus calyces, usually with additional spices or flavourings.",
+      "durationSeconds": 20,
+      "media": {
+        "src": "/assets/trivia/10.jpg",
+        "title": "Hibiscus Sabdariffa calyxes",
+        "author": "Earl Benton",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "source": "https://commons.wikimedia.org/wiki/File:Hibiscus_Sabdariffa_calyxes.jpg",
+        "alt": "A fresh, deep-red hibiscus calyx on the plant.",
+        "caption": "The fleshy calyces are harvested and dried to make zobo. This photograph shows a fresh calyx.",
+        "timing": "reveal"
+      },
+      "fallback": null,
+      "source": "https://commons.wikimedia.org/wiki/File:Hibiscus_Sabdariffa_calyxes.jpg",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 1,
+      "category": "National Symbols",
+      "order": 3,
+      "question": "What do the white Y-shaped lines on Nigeria’s coat of arms represent?",
+      "options": [
+        "The Niger and Benue rivers",
+        "The Ogun and Osun rivers",
+        "The Kaduna and Sokoto rivers",
+        "The Cross and Imo rivers"
+      ],
+      "correctOption": 0,
+      "explanation": "The white Y represents the Niger and Benue rivers. The two waterways are important features of Nigeria’s geography.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Removes Lokoja from this reveal so it does not answer Day 2 question 2.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 1,
+      "category": "Textiles",
+      "order": 4,
+      "question": "Which technique creates the patterns on this adire textile?",
+      "options": [
+        "Embroidery",
+        "Appliqué",
+        "Resist dyeing",
+        "Jacquard weaving"
+      ],
+      "correctOption": 2,
+      "explanation": "Adire is produced through resist-dyeing techniques, traditionally using indigo.",
+      "durationSeconds": 30,
+      "media": {
+        "src": "/assets/trivia/01.jpg",
+        "title": "Aso Adire",
+        "author": "Olaniyan Olushola",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "source": "https://commons.wikimedia.org/wiki/File:Aso_Adire.jpg",
+        "alt": "Dark fabric with pale circular and geometric patterns.",
+        "caption": "Adire uses resist-dyeing techniques to create patterns.",
+        "timing": "question"
+      },
+      "fallback": "Adire patterns are made by preventing dye from reaching parts of a fabric. What is this technique called?",
+      "source": "https://commons.wikimedia.org/wiki/File:Aso_Adire.jpg",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 1,
+      "category": "Food",
+      "order": 5,
+      "question": "Which Nigerian snack, made from yeast-raised dough, is shown?",
+      "options": [
+        "Akara",
+        "Puff-puff",
+        "Boli",
+        "Chin chin"
+      ],
+      "correctOption": 1,
+      "explanation": "Puff-puff consists of small portions of sweetened dough that are deep-fried until golden.",
+      "durationSeconds": 30,
+      "media": {
+        "src": "/assets/trivia/02.jpg",
+        "title": "Nigerian puff-puff",
+        "author": "Afrolems; crop by Off-shell",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "source": "https://commons.wikimedia.org/wiki/File:Nigerian-puff-puff-recipe_cropped.jpg",
+        "alt": "Three rounded golden-brown fried snacks on a dark plate.",
+        "caption": "Puff-puff is made from a yeast-raised dough and deep-fried.",
+        "timing": "question"
+      },
+      "fallback": "Which Nigerian snack is made by deep-frying small portions of yeast-raised dough?",
+      "source": "https://commons.wikimedia.org/wiki/File:Nigerian-puff-puff-recipe_cropped.jpg",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 1,
+      "category": "History and Geography",
+      "order": 6,
+      "question": "Which city served as Nigeria’s capital immediately before Abuja?",
+      "options": [
+        "Calabar",
+        "Kaduna",
+        "Ibadan",
+        "Lagos"
+      ],
+      "correctOption": 3,
+      "explanation": "Lagos was the federal capital before Abuja officially assumed that role in 1991.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Keep the wording and answer options. Prioritise a clear question and a short explanation.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 1,
+      "category": "Literature",
+      "order": 7,
+      "question": "Which Nigerian writer received the 1986 Nobel Prize in Literature?",
+      "options": [
+        "Chinua Achebe",
+        "Ben Okri",
+        "Wole Soyinka",
+        "Chimamanda Ngozi Adichie"
+      ],
+      "correctOption": 2,
+      "explanation": "Wole Soyinka received the 1986 Nobel Prize in Literature.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Keep the wording and answer options. Prioritise a clear question and a short explanation.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 1,
+      "category": "Sport",
+      "order": 8,
+      "question": "D’Tigress represents Nigeria in which sport?",
+      "options": [
+        "Basketball",
+        "Football",
+        "Athletics",
+        "Volleyball"
+      ],
+      "correctOption": 0,
+      "explanation": "D’Tigress is Nigeria’s women’s national basketball team.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Keep the wording and answer options. Prioritise a clear question and a short explanation.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 1,
+      "category": "Cities",
+      "order": 9,
+      "question": "Which Nigerian city is popularly known as the Coal City?",
+      "options": [
+        "Jos",
+        "Enugu",
+        "Aba",
+        "Benin City"
+      ],
+      "correctOption": 1,
+      "explanation": "Enugu became known as the Coal City because of its historic connection to coal mining.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Keep the wording and answer options. Prioritise a clear question and a short explanation.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 1,
+      "category": "Food",
+      "order": 10,
+      "question": "Moi moi and akara may look different, but what main ingredient do they share?",
+      "options": [
+        "Rice",
+        "Yam",
+        "Beans",
+        "Maize"
+      ],
+      "correctOption": 2,
+      "explanation": "Both are commonly made from processed beans. Moi moi is steamed, while akara is fried.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Keep this text-only: the two foods are already named, and a second image adds little to the challenge.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 1,
+      "category": "Places",
+      "order": 11,
+      "question": "Obudu Mountain Resort is located in which state?",
+      "options": [
+        "Plateau",
+        "Taraba",
+        "Adamawa",
+        "Cross River"
+      ],
+      "correctOption": 3,
+      "explanation": "Obudu Mountain Resort is located in Cross River State.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Keep the wording and answer options. Prioritise a clear question and a short explanation.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 1,
+      "category": "Music",
+      "order": 12,
+      "question": "Which music genre is Fela Aníkúlápó Kuti most closely associated with?",
+      "options": [
+        "Afrobeat",
+        "Fuji",
+        "Highlife",
+        "Juju"
+      ],
+      "correctOption": 0,
+      "explanation": "Fela Kuti became the defining figure of Afrobeat, developed alongside collaborators including drummer Tony Allen.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Keep the wording and answer options. Prioritise a clear question and a short explanation.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 2,
+      "category": "Language",
+      "order": 1,
+      "question": "Which Yoruba expression is commonly used to acknowledge someone who is working?",
+      "options": [
+        "E kaaro",
+        "E kaabo",
+        "E ku ise",
+        "E kaale"
+      ],
+      "correctOption": 2,
+      "explanation": "“E ku ise” is used to acknowledge or encourage someone who is working.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Uses Yoruba expressions throughout, so players cannot win simply by identifying which option is Yoruba.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 2,
+      "category": "Geography",
+      "order": 2,
+      "question": "The Niger and Benue rivers meet near which city?",
+      "options": [
+        "Lokoja",
+        "Ilorin",
+        "Makurdi",
+        "Minna"
+      ],
+      "correctOption": 0,
+      "explanation": "The two rivers meet at Lokoja in Kogi State.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Keep the wording and answer options. Prioritise a clear question and a short explanation.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 2,
+      "category": "National Symbols",
+      "order": 3,
+      "question": "Who designed Nigeria’s green-white-green national flag?",
+      "options": [
+        "Ben Enwonwu",
+        "Herbert Macaulay",
+        "Festus Okotie-Eboh",
+        "Michael Taiwo Akinkunmi"
+      ],
+      "correctOption": 3,
+      "explanation": "Michael Taiwo Akinkunmi submitted the winning design ahead of Nigeria’s independence.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Keep the wording and answer options. Prioritise a clear question and a short explanation.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 2,
+      "category": "Food",
+      "order": 4,
+      "question": "Suya is most closely associated with which cooking method?",
+      "options": [
+        "Steaming",
+        "Grilling",
+        "Boiling",
+        "Baking"
+      ],
+      "correctOption": 1,
+      "explanation": "Suya consists of seasoned meat cooked over a grill or open heat.",
+      "durationSeconds": 20,
+      "media": {
+        "src": "/assets/trivia/09.jpg",
+        "title": "Suya in skewers",
+        "author": "Halima Waziri",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "source": "https://commons.wikimedia.org/wiki/File:Suya_in_skewers.jpg",
+        "alt": "Seasoned meat skewers arranged on a grill rack.",
+        "caption": "Suya is seasoned meat cooked over a grill.",
+        "timing": "reveal"
+      },
+      "fallback": null,
+      "source": "https://commons.wikimedia.org/wiki/File:Suya_in_skewers.jpg",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 2,
+      "category": "Art and Heritage",
+      "order": 5,
+      "question": "Which ancient Nigerian culture is associated with terracotta heads like this, often featuring triangular eyes?",
+      "options": [
+        "Igbo-Ukwu",
+        "Benin",
+        "Nok",
+        "Esie"
+      ],
+      "correctOption": 2,
+      "explanation": "Nok culture is renowned for distinctive terracotta sculptures created in ancient Nigeria.",
+      "durationSeconds": 30,
+      "media": {
+        "src": "/assets/trivia/03.jpg",
+        "title": "Head, Nok culture, Honolulu Museum of Art, 8349.1",
+        "author": "Hiart",
+        "license": "CC0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "source": "https://commons.wikimedia.org/wiki/File:Head%2C_Nok_culture%2C_terracotta%2C_Honolulu_Museum_of_Art%2C_8349.1.JPG",
+        "alt": "A terracotta head with pierced eyes and a tall, textured hairstyle.",
+        "caption": "A Nok terracotta head in the Honolulu Museum of Art.",
+        "timing": "question"
+      },
+      "fallback": "Which ancient Nigerian culture is known for terracotta heads with stylised, often triangular eyes?",
+      "source": "https://commons.wikimedia.org/wiki/File:Head%2C_Nok_culture%2C_terracotta%2C_Honolulu_Museum_of_Art%2C_8349.1.JPG",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 2,
+      "category": "Heritage",
+      "order": 6,
+      "question": "Which Nigerian site was inscribed on UNESCO’s World Heritage List in 2005?",
+      "options": [
+        "Sukur Cultural Landscape",
+        "Osun-Osogbo Sacred Grove",
+        "Ogbunike Caves",
+        "Idanre Hills"
+      ],
+      "correctOption": 1,
+      "explanation": "Osun-Osogbo Sacred Grove is an active sacred site and an important expression of Yoruba spiritual and artistic traditions.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Removes “sacred grove” from the prompt because it repeated the correct option verbatim.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 2,
+      "category": "Everyday Nigeria",
+      "order": 7,
+      "question": "What are the small yellow minibuses commonly seen on Lagos streets called?",
+      "options": [
+        "Molue",
+        "Keke",
+        "BRT",
+        "Danfo"
+      ],
+      "correctOption": 3,
+      "explanation": "A danfo is the familiar yellow minibus used for public transport in Lagos.",
+      "durationSeconds": 30,
+      "media": {
+        "src": "/assets/trivia/04.jpg",
+        "title": "Fleet of Danfo buses in Lagos",
+        "author": "Kaizenify",
+        "license": "CC BY-SA 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "source": "https://commons.wikimedia.org/wiki/File:Fleet_of_Danfo_buses_in_Lagos.jpeg",
+        "alt": "Several small yellow minibuses on a busy Lagos street.",
+        "caption": "The small yellow minibuses are known as danfo.",
+        "timing": "question"
+      },
+      "fallback": "What are the small yellow minibuses commonly seen on Lagos streets called?",
+      "source": "https://commons.wikimedia.org/wiki/File:Fleet_of_Danfo_buses_in_Lagos.jpeg",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 2,
+      "category": "Language",
+      "order": 8,
+      "question": "Which Hausa phrase means “welcome”?",
+      "options": [
+        "Sannu da zuwa",
+        "Kedu",
+        "E kaabo",
+        "Nnoo"
+      ],
+      "correctOption": 0,
+      "explanation": "“Sannu da zuwa” is a Hausa expression used to welcome someone.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Keep the wording and answer options. Prioritise a clear question and a short explanation.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 2,
+      "category": "National Symbols",
+      "order": 9,
+      "question": "What does the black shield on Nigeria’s coat of arms represent?",
+      "options": [
+        "Mineral wealth",
+        "Military strength",
+        "Fertile soil",
+        "The Atlantic Ocean"
+      ],
+      "correctOption": 2,
+      "explanation": "The black shield represents Nigeria’s fertile soil.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Keep the wording and answer options. Prioritise a clear question and a short explanation.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 2,
+      "category": "Everyday Language",
+      "order": 10,
+      "question": "In Nigerian informal speech, what does it usually mean to “ginger” someone?",
+      "options": [
+        "To irritate them",
+        "To encourage or energise them",
+        "To delay them",
+        "To imitate them"
+      ],
+      "correctOption": 1,
+      "explanation": "To “ginger” someone commonly means to motivate, encourage or excite them.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "No energy-burst illustration: that would visually hint at “energise”.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 2,
+      "category": "Symbols and Communication",
+      "order": 11,
+      "question": "What is Nsibidi?",
+      "options": [
+        "A system of woven family patterns",
+        "A system of royal praise names",
+        "A system of musical drum signals",
+        "A system of written signs and symbols"
+      ],
+      "correctOption": 3,
+      "explanation": "Nsibidi is an indigenous system of signs and symbols associated with several communities and societies in southeastern Nigeria and the Cross River region.",
+      "durationSeconds": 30,
+      "media": null,
+      "fallback": null,
+      "source": "Balances option length and makes all four choices communication-related. No invented Nsibidi symbols.",
+      "reviewStatus": "approved"
+    },
+    {
+      "day": 2,
+      "category": "Places and Heritage",
+      "order": 12,
+      "question": "In which city would you find the historic Kofar Mata dye pits?",
+      "options": [
+        "Kano",
+        "Ilorin",
+        "Abeokuta",
+        "Sokoto"
+      ],
+      "correctOption": 0,
+      "explanation": "The Kofar Mata dye pits in Kano are known for longstanding indigo-dyeing traditions.",
+      "durationSeconds": 20,
+      "media": null,
+      "fallback": null,
+      "source": "Keep the wording and answer options. Prioritise a clear question and a short explanation.",
+      "reviewStatus": "approved"
+    }
   ]
 }

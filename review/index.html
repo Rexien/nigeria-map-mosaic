@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Passport Trivia · Draft review</title><link rel="stylesheet" href="/css/app.css"><link rel="stylesheet" href="/review/review.css"></head>
+<body class="review-page">
+<header class="site-header"><div class="brand"><span class="brand-mark"></span><span>Passport Trivia<small>SCIN Independence Day · Draft review</small></span></div><span class="review-label">Preview only — live game unchanged</span></header>
+<main class="review-main">
+  <div class="review-heading"><div><h1>Try the questions.</h1><p>24 questions. Two days. Real photographs where they help. Choose a question, then try the phone or switch the result.</p></div><p class="review-safety">Sample scores only. No accounts, live controls or publishing.</p></div>
+  <section class="review-controls" aria-label="Preview controls">
+    <label>Question<select id="question-select"></select></label>
+    <div class="review-nav"><button id="previous" class="button secondary" aria-label="Previous question">Previous</button><button id="next" class="button secondary" aria-label="Next question">Next</button></div>
+    <label>Show<select id="state-select"><option value="open">Question open</option><option value="correct">Correct answer</option><option value="wrong">Wrong answer</option><option value="timeout">Time expired / no answer</option><option value="lobby">Waiting screen</option></select></label>
+    <label>Phone size<select id="size-select"><option value="390,844">Phone · 390 × 844</option><option value="320,740">Small phone · 320 × 740</option><option value="768,1024">Tablet · 768 × 1024</option></select></label>
+  </section>
+  <div class="review-previews">
+    <section class="preview-phone"><div class="preview-heading"><h2>On your device</h2><a id="phone-link" target="_blank" rel="noopener">Open separately</a></div><div id="phone-stage" class="scaled-stage"><iframe id="phone-frame" title="Participant draft preview"></iframe></div></section>
+    <section class="preview-projector"><div class="preview-heading"><h2>On the main screen</h2><a id="projector-link" target="_blank" rel="noopener">Open separately</a></div><div id="projector-stage" class="scaled-stage"><iframe id="projector-frame" title="Projected draft preview"></iframe></div><p class="review-hint">The main screen always reveals the correct answer. Only the phone shows the individual’s result.</p><div id="editorial" class="editorial" aria-live="polite"></div></section>
+  </div>
+  <details class="review-details"><summary>Original document wording and image credits</summary><div id="comparison"></div></details>
+  <p class="review-footer">To request changes, send the day and question number. This local review contains answer keys: do not share it with participants or publish it as the game.</p>
+</main><script type="module" src="/review/review.js"></script></body></html>

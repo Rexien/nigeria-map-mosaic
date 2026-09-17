@@ -1,0 +1,23 @@
+#preview-root{min-height:100%;height:100%}
+.draft-media{margin:0;min-width:0;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:#edf0e6;border:1px solid var(--line);padding:10px}
+.draft-media img{display:block;max-width:100%;min-height:0;object-fit:contain;width:100%;height:100%;flex:1}
+.draft-media img[hidden],.draft-media [hidden]{display:none}
+.draft-media figcaption{font-size:.85rem;line-height:1.25;color:var(--muted);text-align:center;flex:0 0 auto}
+.media-error{font-weight:750;line-height:1.5;padding:16px}
+body[data-view="phone"] .draft-media{height:220px;margin:16px 0}
+body[data-view="phone"] .play-panel{padding:22px}
+body[data-view="phone"] .play-panel h1{font-size:clamp(1.3rem,4.6vw,1.8rem);line-height:1.2;margin:16px 0}
+body[data-view="phone"] .page{padding-top:22px;padding-bottom:30px}
+body[data-view="phone"] .answers{gap:9px;margin:18px 0}
+body[data-view="phone"] .answer{padding:13px;min-height:50px}
+.draft-score{font-weight:800;color:var(--palm);line-height:1.5}.draft-score small{display:block;font-size:.78rem;font-weight:400;color:var(--muted)}
+.draft-projector{height:100svh;min-height:100svh;grid-template-rows:auto auto minmax(0,1fr) auto auto}
+.draft-projector.has-media{grid-template-columns:minmax(0,.86fr) minmax(0,1.14fr) auto;grid-template-areas:"header header header" "question question timer" "photo options options" "explanation explanation explanation" "footer footer footer"}
+.draft-projector .draft-media{grid-area:photo;align-self:stretch;overflow:hidden}
+.draft-projector.has-media .display-options{grid-template-columns:1fr;align-content:center;gap:10px}
+.draft-projector.has-media .display-option{min-height:55px;padding:9px 15px;font-size:clamp(1.1rem,1.8vw,2rem)}
+.draft-projector.has-media .display-option-letter{width:36px}
+.draft-projector h1{font-size:clamp(1.8rem,3vw,3.7rem);line-height:1.08}
+.draft-projector.has-media.is-revealed h1{grid-column:1/-1}
+.draft-projector footer{font-size:1rem}
+@media(max-height:620px){.draft-projector{padding:24px 36px;gap:8px 20px}.draft-projector h1{font-size:clamp(1.5rem,2.4vw,2.3rem)}.draft-projector.has-media .display-option{min-height:42px;font-size:1rem;padding:5px 10px}.draft-projector .display-option-letter{width:28px}.draft-projector aside{font-size:.85rem}.draft-projector .draft-media figcaption{font-size:.7rem}.draft-projector .display-brand{font-size:1rem}.draft-projector .display-category{font-size:.9rem}}
