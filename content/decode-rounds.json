@@ -1,11 +1,329 @@
 {
-  "notice":"REQUIRES HUMAN FACT CHECK",
-  "rounds":[
-    {"zone":"North West","state":"Kano","options":["Kano","Kaduna","Kebbi","Katsina"],"correctOption":0,"clues":["This state sits in Nigeria’s far north and has long been a major commercial centre.","Which state is especially known for the Durbar festival tradition?","Its capital has the same name as the state."],"revealFact":"The ancient Kano city walls form part of the city’s historic landscape.","geoId":"Kano","source":"REQUIRES HUMAN FACT CHECK — organiser to add authoritative source","reviewStatus":"requires_fact_check"},
-    {"zone":"North East","state":"Bauchi","options":["Bauchi","Borno","Gombe","Taraba"],"correctOption":0,"clues":["This state contains a major national park spanning savanna landscapes.","Which state contains Yankari Game Reserve?","Its capital has the same name as the state."],"revealFact":"Yankari is known for wildlife and warm springs.","geoId":"Bauchi","source":"REQUIRES HUMAN FACT CHECK — organiser to add authoritative source","reviewStatus":"requires_fact_check"},
-    {"zone":"North Central","state":"Plateau","options":["Plateau","Nasarawa","Benue","Kogi"],"correctOption":0,"clues":["Much of this state lies on elevated terrain in central Nigeria.","Which state contains the Shere Hills?","Its capital is Jos."],"revealFact":"The Jos Plateau is known for its distinctive highland landscape.","geoId":"Plateau","source":"REQUIRES HUMAN FACT CHECK — organiser to add authoritative source","reviewStatus":"requires_fact_check"},
-    {"zone":"South West","state":"Ogun","options":["Ogun","Oyo","Osun","Ondo"],"correctOption":0,"clues":["This state borders Lagos and the Republic of Benin.","Which state contains Olumo Rock?","Its capital is Abeokuta."],"revealFact":"Abeokuta’s name is commonly translated as “under the rock”.","geoId":"Ogun","source":"REQUIRES HUMAN FACT CHECK — organiser to add authoritative source","reviewStatus":"requires_fact_check"},
-    {"zone":"South East","state":"Enugu","options":["Enugu","Abia","Anambra","Ebonyi"],"correctOption":0,"clues":["This state’s history is closely connected with coal mining.","Which state contains the Awhum cave and waterfall area?","Its capital has the same name and is nicknamed the Coal City."],"revealFact":"Enugu developed as an important coal-mining centre in the twentieth century.","geoId":"Enugu","source":"REQUIRES HUMAN FACT CHECK — organiser to add authoritative source","reviewStatus":"requires_fact_check"},
-    {"zone":"South South","state":"Cross River","options":["Cross River","Akwa Ibom","Rivers","Bayelsa"],"correctOption":0,"clues":["This coastal-zone state stretches northward along an international border.","Which state is especially known for the annual Calabar Carnival?","Its capital is Calabar."],"revealFact":"Cross River National Park protects tropical rainforest habitat.","geoId":"Cross River","source":"REQUIRES HUMAN FACT CHECK — organiser to add authoritative source","reviewStatus":"requires_fact_check"}
+  "notice": "REVIEWED AND APPROVED DECODE ROUNDS WITH COMMONS MEDIA",
+  "rounds": [
+    {
+      "id": "decode-1",
+      "zone": "South West",
+      "state": "Ogun",
+      "geoId": "Ogun",
+      "options": [
+        "Ogun",
+        "Oyo",
+        "Osun",
+        "Ondo"
+      ],
+      "correctOption": 0,
+      "clues": [
+        "This state is globally celebrated for the centuries-old artisanal production of indigo-dyed adire textile cloth, centered in Abeokuta.",
+        "Every year, colourful horse-riding families and traditional age-grade societies parade before the Awujale at the Ojude Oba festival in Ijebu Ode.",
+        "Its capital is built around Olumo Rock, a massive granite fortress outcrop that sheltered its people during nineteenth-century regional conflicts."
+      ],
+      "clueMedia": [
+        {
+          "src": "/assets/decode/01.jpg",
+          "timing": "question",
+          "alt": "Traditional indigo resist-dyed patterned fabric hung to dry",
+          "caption": "Traditional Adire textile craft in Abeokuta, Ogun State. Photo: Olaniyan Olushola (CC BY-SA 4.0)",
+          "author": "Olaniyan Olushola",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Traditional indigo-dyed adire cloth with intricate resist patterns."
+        },
+        {
+          "src": "/assets/decode/02.jpg",
+          "timing": "question",
+          "alt": "Procession of traditional horse riders in ceremonial attire",
+          "caption": "Ojude Oba festival in Ijebu Ode, Ogun State. Photo: MediaMOF (CC BY-SA 4.0)",
+          "author": "MediaMOF",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Parade of horse riders and traditional age grades at the annual cultural festival."
+        },
+        {
+          "src": "/assets/decode/03.jpg",
+          "timing": "question",
+          "alt": "Massive towering ancient granite rock and staircase",
+          "caption": "Olumo Rock in Abeokuta, Ogun State. Photo: Adedayo Adesilola (CC BY-SA 4.0)",
+          "author": "Adedayo Adesilola",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Massive granite outcrop that served as a historic natural fortress."
+        }
+      ],
+      "revealFact": "Ogun State's capital Abeokuta takes its name ('under the rock') from Olumo Rock, which served as a fortress for the Egba people in the 1830s.",
+      "source": "Encyclopaedia Britannica; National Commission for Museums and Monuments Nigeria",
+      "reviewStatus": "approved",
+      "durationSeconds": 30
+    },
+    {
+      "id": "decode-2",
+      "zone": "North West",
+      "state": "Kano",
+      "geoId": "Kano",
+      "options": [
+        "Kaduna",
+        "Kano",
+        "Katsina",
+        "Jigawa"
+      ],
+      "correctOption": 1,
+      "clues": [
+        "Human settlement here traces back to iron-smelting blacksmiths who gathered around the iconic summit of Dala Hill over a thousand years ago.",
+        "The ancient city was encircled by massive fourteenth-century earthwork walls that spanned fourteen kilometers, accessed through gates such as Kofar Nasarawa.",
+        "The centuries-old Kofar Mata dye pits, founded in 1498, remain among Africa’s oldest operating textile dyeing centers."
+      ],
+      "clueMedia": [
+        {
+          "src": "/assets/decode/04.jpg",
+          "timing": "question",
+          "alt": "Elevated ancient settlement hill overlooking a sprawling city",
+          "caption": "Dala Hill, historic settlement site in Kano State. Photo: Anasskoko (CC BY-SA 4.0)",
+          "author": "Anasskoko",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Historic ancient settlement hill overlooking the city."
+        },
+        {
+          "src": "/assets/decode/05.jpg",
+          "timing": "question",
+          "alt": "Historic earthworks and arched city gate structure",
+          "caption": "Kofar Nasarawa city gate, Kano State. Photo: Suleiman Umar et al. (CC BY-SA 4.0)",
+          "author": "Suleiman Umar, Aminu Abdullahi, Abubakar Yusuf",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Portion of the historic earthworks and city gate structure."
+        },
+        {
+          "src": "/assets/decode/06.jpg",
+          "timing": "question",
+          "alt": "Workers at circular indigo dye pits",
+          "caption": "Kofar Mata dye pits, Kano State. Photo: Andy Musa Chantu (CC BY-SA 4.0)",
+          "author": "Andy Musa Chantu",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Ancient indigo dyeing pits operating for centuries."
+        }
+      ],
+      "revealFact": "Kano was the terminus of ancient trans-Saharan trade routes. The Kofar Mata dye pits were established in 1498 during the reign of Sarki Muhammadu Rumfa.",
+      "source": "Kano Chronicle; UNESCO Tentative List (Ancient Kano City Walls)",
+      "reviewStatus": "approved",
+      "durationSeconds": 30
+    },
+    {
+      "id": "decode-3",
+      "zone": "North Central",
+      "state": "Niger",
+      "geoId": "Niger",
+      "options": [
+        "Kogi",
+        "Kwara",
+        "Niger",
+        "Benue"
+      ],
+      "correctOption": 2,
+      "clues": [
+        "This state is home to Kainji Dam, commissioned in 1968 across the River Niger, forming one of the country's most vital hydroelectric power stations.",
+        "Scenic Gurara Waterfalls spans approximately 300 meters across the Gurara River, tumbling over rocky tiers surrounded by savanna forest.",
+        "Guarding the state along the strategic eastern highway corridor stands Zuma Rock, an immense 725-meter inselberg with natural facial contours."
+      ],
+      "clueMedia": [
+        {
+          "src": "/assets/decode/07.jpg",
+          "timing": "question",
+          "alt": "Large concrete hydroelectric dam and spillway across a river",
+          "caption": "Kainji Dam, Niger State. Photo: Arcgwandu (CC BY-SA 4.0)",
+          "author": "Arcgwandu",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Major hydroelectric power station and dam across the Niger River."
+        },
+        {
+          "src": "/assets/decode/08.jpg",
+          "timing": "question",
+          "alt": "Wide tiered waterfalls tumbling over rock ledges",
+          "caption": "Gurara Waterfalls, Niger State. Photo: Amoghale (CC BY-SA 4.0)",
+          "author": "Amoghale",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Scenic cascades tumbling over wide rock tiers surrounded by lush vegetation."
+        },
+        {
+          "src": "/assets/decode/09.jpg",
+          "timing": "question",
+          "alt": "Enormous natural monolith rising prominently above surrounding plains",
+          "caption": "Zuma Rock, Niger State. Photo: Andy Waite (CC BY-SA 1.0)",
+          "author": "Andy Waite",
+          "license": "CC BY-SA 1.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/1.0",
+          "fallback": "Huge natural monolith rising prominently above the surrounding plains."
+        }
+      ],
+      "revealFact": "Niger State is Nigeria's largest state by land area (spanning over 76,000 km²) and hosts three major hydroelectric dams: Kainji, Jebba, and Shiroro.",
+      "source": "National Bureau of Statistics Nigeria; Federal Ministry of Power",
+      "reviewStatus": "approved",
+      "durationSeconds": 30
+    },
+    {
+      "id": "decode-4",
+      "zone": "South East",
+      "state": "Anambra",
+      "geoId": "Anambra",
+      "options": [
+        "Enugu",
+        "Imo",
+        "Abia",
+        "Anambra"
+      ],
+      "correctOption": 3,
+      "clues": [
+        "Groundbreaking archaeological excavations here uncovered 9th-century bronze castings of exquisite artistry and lost-wax mastery at Igbo-Ukwu.",
+        "Nestled in a lush rainforest valley, the Ogbunike Caves network has provided sanctuary and spiritual significance for generations.",
+        "The historic River Niger Bridge at Onitsha serves as the legendary gateway linking western Nigeria to the commercial heartland of the southeast."
+      ],
+      "clueMedia": [
+        {
+          "src": "/assets/decode/10.jpg",
+          "timing": "question",
+          "alt": "Intricate ancient cast bronze roped vessel artifact",
+          "caption": "Igbo-Ukwu bronze casting, Anambra State. Photo: Ukabia, Modestusonyeke (CC BY-SA 3.0)",
+          "author": "Ukabia, Modestusonyeke",
+          "license": "CC BY-SA 3.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+          "fallback": "Ancient 9th-century bronze casting with intricate concentric and beaded decoration."
+        },
+        {
+          "src": "/assets/decode/11.jpg",
+          "timing": "question",
+          "alt": "Natural forested valley with rocky cave entrances and springs",
+          "caption": "Ogbunike Caves, Anambra State. Photo: Favour1215 (CC BY-SA 4.0)",
+          "author": "Favour1215",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Network of sandstone caves and freshwater streams nestled in a valley."
+        },
+        {
+          "src": "/assets/decode/12.jpg",
+          "timing": "question",
+          "alt": "Long steel truss bridge spanning across a wide river",
+          "caption": "River Niger Bridge into Onitsha, Anambra State. Photo: Shiraz Chakera (CC BY-SA 2.0)",
+          "author": "Shiraz Chakera",
+          "license": "CC BY-SA 2.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+          "fallback": "Steel truss bridge spanning the River Niger toward the commercial hub of Onitsha."
+        }
+      ],
+      "revealFact": "The Igbo-Ukwu bronzes date to the 9th century AD, centuries before European contact, demonstrating indigenous West African metallurgical mastery.",
+      "source": "Thurstan Shaw (Igbo-Ukwu: An Account of Archaeological Discoveries); UNESCO World Heritage Tentative List",
+      "reviewStatus": "approved",
+      "durationSeconds": 30
+    },
+    {
+      "id": "decode-5",
+      "zone": "South South",
+      "state": "Cross River",
+      "geoId": "Cross River",
+      "options": [
+        "Akwa Ibom",
+        "Cross River",
+        "Rivers",
+        "Delta"
+      ],
+      "correctOption": 1,
+      "clues": [
+        "Near the Cameroon border, Agbokim Waterfalls plunges across seven distinct cascading torrents over lush rainforest bluffs.",
+        "The high-altitude plateau of Obudu Mountain Resort rises over 1,500 meters above sea level, offering temperate highland climates and rolling green valleys.",
+        "Every December, the state capital comes alive with the Calabar Carnival, hailed as Africa's largest street party with dazzling pageantry."
+      ],
+      "clueMedia": [
+        {
+          "src": "/assets/decode/13.jpg",
+          "timing": "question",
+          "alt": "Multiple streams of waterfall plunging over rainforest cliff into a pool",
+          "caption": "Agbokim Waterfalls, Cross River State. Photo: Ei'eke (CC BY-SA 4.0)",
+          "author": "Ei'eke",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Seven-stream waterfall tumbling over steep rainforest cliffs into a calm pool."
+        },
+        {
+          "src": "/assets/decode/14.jpg",
+          "timing": "question",
+          "alt": "Verdant highland plateau with winding mountain slopes",
+          "caption": "Obudu mountain plateau, Cross River State. Photo: Bassnificient (CC BY-SA 4.0)",
+          "author": "Bassnificient",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Rolling green mountain peaks and valleys on the high plateau."
+        },
+        {
+          "src": "/assets/decode/15.jpg",
+          "timing": "question",
+          "alt": "Carnival parade participants in vibrant feathered costumes and headdresses",
+          "caption": "Calabar Carnival dancers, Cross River State. Photo: Raji kunle (CC BY-SA 4.0)",
+          "author": "Raji kunle",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Vibrant masquerade and street dancers in colourful feathered regalia."
+        }
+      ],
+      "revealFact": "Cross River National Park is one of the oldest rainforests in Africa, home to endangered Cross River gorillas and rare biodiversity.",
+      "source": "Cross River State Tourism Bureau; Nigeria National Parks Service",
+      "reviewStatus": "approved",
+      "durationSeconds": 30
+    },
+    {
+      "id": "decode-6",
+      "zone": "South West",
+      "state": "Lagos",
+      "geoId": "Lagos",
+      "options": [
+        "Lagos",
+        "Ogun",
+        "Ondo",
+        "Edo"
+      ],
+      "correctOption": 0,
+      "clues": [
+        "Visitors walk high above coastal wetlands and secondary forest along the 401-meter suspended canopy walkway at Lekki Conservation Centre.",
+        "The distinctive military-peaked-cap shaped National Arts Theatre in Iganmu was commissioned for the landmark FESTAC '77 pan-African festival.",
+        "During solemn civic occasions, white-robed Adamu Orisha masquerades holding opambata staffs parade through the historic streets of Isale Eko in the Eyo Festival."
+      ],
+      "clueMedia": [
+        {
+          "src": "/assets/decode/16.jpg",
+          "timing": "question",
+          "alt": "Suspended wooden canopy walkway high above coastal treetops",
+          "caption": "Canopy walkway at Lekki Conservation Centre, Lagos State. Photo: Ashinze (CC BY-SA 4.0)",
+          "author": "Ashinze",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Suspended wooden canopy walkway stretching high above the coastal reserve."
+        },
+        {
+          "src": "/assets/decode/17.jpg",
+          "timing": "question",
+          "alt": "Prominent military peaked-cap shaped civic arts complex",
+          "caption": "National Arts Theatre in Iganmu, Lagos State. Photo: Maersk Line (CC BY-SA 2.0)",
+          "author": "Maersk Line",
+          "license": "CC BY-SA 2.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+          "fallback": "Distinctive military-hat shaped national cultural monument."
+        },
+        {
+          "src": "/assets/decode/18.jpg",
+          "timing": "question",
+          "alt": "Traditional white-robed masquerades with broad-brimmed hats and ceremonial staffs",
+          "caption": "Eyo masquerade procession, Lagos State. Photo: Slashme (CC BY-SA 3.0)",
+          "author": "Slashme",
+          "license": "CC BY-SA 3.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+          "fallback": "White-robed masquerades holding traditional opambata staffs during the festival."
+        }
+      ],
+      "revealFact": "Lekki Conservation Centre features the longest canopy walkway in Africa (401 meters), built by the Nigerian Conservation Foundation in 1990.",
+      "source": "Nigerian Conservation Foundation; Lagos State Ministry of Tourism, Arts and Culture",
+      "reviewStatus": "approved",
+      "durationSeconds": 30
+    }
   ]
 }

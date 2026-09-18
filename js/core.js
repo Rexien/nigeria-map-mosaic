@@ -55,7 +55,7 @@
 
   function quizPoints({ activity, correct, clueNumber = 1, voided = false }) {
     if (voided || !correct) return 0;
-    return activity === 'decode' ? Math.max(0, 4 - Number(clueNumber || 1)) : 1000;
+    return 1000;
   }
 
   function compareRank(a, b) {

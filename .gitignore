@@ -15,7 +15,12 @@ node_modules/
 .env
 .netlify/
 .local-data/
-data/
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.geojson
+!data/nigeria-states-paths.js
+!data/nigeria-bounds.js
 *.db
 *.db-wal
 *.db-shm
