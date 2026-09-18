@@ -18,7 +18,7 @@ const decode=decodeFile.rounds.map((r,i)=>({id:`decode-${i+1}`,day:i<3?1:2,order
 const questions=[...passport,...decode];
 const fresh=()=>({settings:{active_activity:'lens',screen_mode:'welcome',rehearsal_mode:true,rosterFrozen:false,capacityMode:'auto',maxActivePlayers:1500},participants:[],lens:[],answers:[],audit:[],questionOverrides:{},session:{id:'local-session',state:'lobby',currentQuestionId:null,currentClue:1,openedAt:null,deadlineAt:null,responseCount:0,version:1},leaderboardSnapshots:{},participantSnapshots:{}});
 let data;try{data=JSON.parse(await readFile(storePath,'utf8'))}catch{data=fresh()}
-data.questionOverrides||={};data.leaderboardSnapshots||={};data.participantSnapshots||={};questions.forEach(q=>Object.assign(q,data.questionOverrides[q.id]||{}));
+data.settings||={};data.settings.screen_mode||='welcome';data.questionOverrides||={};data.leaderboardSnapshots||={};data.participantSnapshots||={};questions.forEach(q=>Object.assign(q,data.questionOverrides[q.id]||{}));
 const persist=async()=>{await mkdir(join(root,'.local-data'),{recursive:true});await writeFile(storePath,JSON.stringify(data,null,2))};
 
 const sseClients = new Set();
