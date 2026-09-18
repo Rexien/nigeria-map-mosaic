@@ -136,8 +136,8 @@ async function recover(e){
   return json(200,{participant:{id:rows[0].id,alias:rows[0].alias,isSpectator},token:rawToken,credential});
 }
 async function buildLiveState(skipAuto=false){
-  const ev=await event(); const settings=(await db(`event_settings?event_id=eq.${ev.id}&select=active_activity`))[0]; const sessions=await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`); const s=skipAuto?sessions[0]:await autoRevealSession(sessions[0]);
-  if(!s){const envelope=createStateEnvelope({event:ev,eventId:ev.id,state:'lobby',activity:settings?.active_activity||'lens',serverNow:new Date().toISOString()});return json(200,envelope)}
+  const ev=await event(); const settings=(await db(`event_settings?event_id=eq.${ev.id}&select=active_activity,screen_mode`))[0]; const sessions=await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`); const s=skipAuto?sessions[0]:await autoRevealSession(sessions[0]);
+  if(!s){const envelope=createStateEnvelope({event:ev,eventId:ev.id,state:'lobby',activity:settings?.active_activity||'lens',screenMode:settings?.screen_mode||'welcome',serverNow:new Date().toISOString()});return json(200,envelope)}
   let question=null; if(s.current_question_id&&(s.state==='preparing'||['open','locked','revealed','leaderboard','round_complete'].includes(s.state))){ const q=(await db(`quiz_questions?id=eq.${s.current_question_id}&select=*`))[0]; if(q){ const options=await db(`question_options?question_id=eq.${q.id}&select=option_index,label&order=option_index`); const round=(await db(`quiz_rounds?id=eq.${q.round_id}&select=day,game_id`))[0]; const game=(await db(`quiz_games?id=eq.${round.game_id}&select=activity,title`))[0]; question={id:q.id,activity:game.activity,title:game.title,day:round.day,category:q.category,question:q.question,durationSeconds:q.duration_seconds,imageUrl:q.image_url,altText:q.alt_text,media:q.media||null,fallback:q.image_fallback||null,options:options.map(o=>o.label)}; if(game.activity==='decode'){const d=(await db(`decode_state_rounds?round_id=eq.${q.round_id}&select=clues,clue_media,state_geo_id,reveal_fact`))[0];question.clueNumber=s.current_clue;question.clue=d?.clues?.[s.current_clue-1]||null;if(d?.clue_media&&d.clue_media[s.current_clue-1]){question.media=d.clue_media[s.current_clue-1];question.imageUrl=question.media.src;question.altText=question.media.alt;question.fallback=question.media.fallback;}question.cluesSoFar=(d?.clues||[]).slice(0,s.current_clue);question.clueMediaSoFar=(d?.clue_media||[]).slice(0,s.current_clue);if(['revealed','leaderboard','round_complete'].includes(s.state))question.highlightState=d?.state_geo_id||null;} if(['revealed','leaderboard','round_complete'].includes(s.state)){question.correctOption=q.correct_option;question.explanation=q.explanation;} } }
   const envelope = createStateEnvelope({
     event: ev,
@@ -146,6 +146,7 @@ async function buildLiveState(skipAuto=false){
     version: s.version,
     state: s.state,
     activity: settings?.active_activity || question?.activity || 'lens',
+    screenMode: settings?.screen_mode || 'welcome',
     currentClue: s.current_clue,
     openedAt: s.opened_at,
     deadlineAt: s.deadline_at,
@@ -266,8 +267,11 @@ async function adminAction(e,admin){ const ev=await event(); const b=JSON.parse(
   if(b.kind==='moderate'){const before=(await db(`lens_submissions?id=eq.${b.id}&select=*`))[0]; if(!before)return json(404,{error:'Response not found'}); const allowed=['approved','rejected','hidden','pending']; if(!allowed.includes(b.status))return json(422,{error:'Invalid moderation status'}); const patch={status:b.status,reviewed_by:admin.id,reviewed_at:new Date().toISOString()}; if(typeof b.phrase==='string'){const phrase=clean(b.phrase);if(!phrase||phrase.length>72)return json(422,{error:'Invalid phrase'});patch.phrase=phrase;patch.normalized_phrase=phrase.toLowerCase();} const after=(await db(`lens_submissions?id=eq.${b.id}`,{method:'PATCH',body:JSON.stringify(patch)}))[0];await audit(admin,ev,'moderate','lens_submission',b.id,before,after);return json(200,{response:after});}
   if(b.kind==='set_settings'){
     if(!['lens','passport','decode'].includes(b.activeActivity))return json(422,{error:'Invalid activity.'});
+    const current=(await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`))[0];
+    if(current?.state==='open')return json(409,{error:'Wait for the current question to close before changing activities.'});
     const before=(await db(`event_settings?event_id=eq.${ev.id}&select=*`))[0];
-    const after=(await db(`event_settings?event_id=eq.${ev.id}`,{method:'PATCH',body:JSON.stringify({active_activity:b.activeActivity,rehearsal_mode:Boolean(b.rehearsalMode),updated_at:new Date().toISOString()})}))[0];
+    const after=(await db(`event_settings?event_id=eq.${ev.id}`,{method:'PATCH',body:JSON.stringify({active_activity:b.activeActivity,screen_mode:'activity',rehearsal_mode:Boolean(b.rehearsalMode),updated_at:new Date().toISOString()})}))[0];
+    if(current){const changed=before.active_activity!==b.activeActivity;await db(`live_sessions?id=eq.${current.id}`,{method:'PATCH',body:JSON.stringify({...(changed?{state:'lobby',current_question_id:null,current_round_id:null,opened_at:null,deadline_at:null}:{}),version:current.version+1,updated_at:new Date().toISOString()})});}
     await audit(admin,ev,'set_event_settings','event_settings',ev.id,before,after);return json(200,{settings:after});
   }
   if(b.kind==='clear_data'){
@@ -283,6 +287,8 @@ async function adminAction(e,admin){ const ev=await event(); const b=JSON.parse(
   const session=await autoRevealSession((await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`))[0]);
   if(!session)return json(409,{error:'Create a live session in Supabase first.'});
   if(b.kind==='show_welcome'){
+    if(session.state==='open')return json(409,{error:'Wait for the current question to close before showing Welcome.'});
+    await db(`event_settings?event_id=eq.${ev.id}`,{method:'PATCH',body:JSON.stringify({screen_mode:'welcome',updated_at:new Date().toISOString()})});
     const after=(await db(`live_sessions?id=eq.${session.id}`,{method:'PATCH',body:JSON.stringify({state:'lobby',current_question_id:null,current_round_id:null,opened_at:null,deadline_at:null,updated_at:new Date().toISOString(),version:session.version+1})}))[0];
     await audit(admin,ev,'show_welcome','live_session',session.id,session,after);
     return json(200,{session:after});
@@ -295,7 +301,7 @@ async function adminAction(e,admin){ const ev=await event(); const b=JSON.parse(
     const now=new Date(),activity=q.quiz_rounds?.quiz_games?.activity||'passport';
     const after=(await db(`live_sessions?id=eq.${session.id}`,{method:'PATCH',body:JSON.stringify({current_question_id:q.id,current_round_id:q.round_id,current_clue:1,state:'open',opened_at:now.toISOString(),deadline_at:new Date(now.getTime()+(q.duration_seconds||20)*1000).toISOString(),updated_at:now.toISOString(),version:session.version+1})}))[0];
     await db('live_question_state',{method:'POST',prefer:'resolution=merge-duplicates,return=representation',body:JSON.stringify({session_id:session.id,question_id:q.id,response_count:0})});
-    await db(`event_settings?event_id=eq.${ev.id}`,{method:'PATCH',body:JSON.stringify({active_activity:activity,updated_at:now.toISOString()})});
+    await db(`event_settings?event_id=eq.${ev.id}`,{method:'PATCH',body:JSON.stringify({active_activity:activity,screen_mode:'activity',updated_at:now.toISOString()})});
     await audit(admin,ev,'open_question','live_session',session.id,session,after);return json(200,{session:after});
   }
   if(b.kind==='select_question'){

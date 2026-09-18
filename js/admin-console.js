@@ -21,7 +21,7 @@
   let adminStatus;
   function applyAdminStatus(status){
     adminStatus=status;const state=status.session?.state||'lobby',activity=status.settings?.active_activity||'lens';
-    const isLobby = state==='lobby' && !status.session?.current_question_id && !status.session?.currentQuestionId;
+    const isLobby = (status.settings?.screen_mode||'welcome')==='welcome';
     $('#admin-name').textContent=status.admin.displayName;$('#admin-participants').textContent=status.metrics.participants;$('#admin-responses').textContent=status.metrics.responseCount;
     $('#live-state').textContent=isLobby?'Welcome screen showing':activity==='lens'?'Map is live':states[state]||state;$('#screen-activity').textContent=isLobby?'Welcome screen':activityNames[activity];$('#run-mode').textContent=status.settings?.rehearsal_mode?'Practice':'Live';
     if(status.capacity){

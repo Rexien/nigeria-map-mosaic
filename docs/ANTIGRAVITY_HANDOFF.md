@@ -3,6 +3,20 @@
 Updated 17 September 2026. Read the existing code before editing. This is an
 existing working application, not a request to rebuild or change stacks.
 
+## 18 September checkpoint: projector screen selector
+
+Welcome is now an explicit `screen_mode` separate from the active game. Admin
+radio choices should project Welcome (QR), Map, Passport standby or Decode
+standby immediately. The screen mode is persisted locally and in the additive
+`202609180001_screen_mode.sql` migration; the latter is **not applied** to the
+hosted database. Apply it before deploying this code. The existing active quiz
+is preserved by migration. Switching away during an open question is blocked.
+`js/app.js` now renders the small 26 badge with stable circle dimensions; at
+1280×720 the badge and QR layout were visually checked. The migration, live
+admin actions and hosted deployment have not been run here. The earlier
+"Latest checkpoint" section below predates Antigravity's later commits and
+must not be interpreted as current overall progress.
+
 ## Latest checkpoint — user requested pause for Antigravity
 
 Since the original handover, server-side media foundations were added:
