@@ -503,6 +503,7 @@ body { background-image: linear-gradient(rgba(0, 135, 83, .035) 1px, transparent
 .leaderboard li { min-width: 0; display: flex; justify-content: space-between; gap: 18px; padding: clamp(8px, 1.2vh, 15px); border-bottom: 2px solid var(--line); font-size: clamp(1.2rem, 1.75vw, 2.1rem); }
 .leaderboard li span { min-width: 0; overflow-wrap: anywhere; }
 .leaderboard strong { flex: 0 0 auto; color: var(--forest); }
+.leaderboard .leader-time { font-size: .72em; font-weight: 600; opacity: .82; margin-left: 6px; }
 .screen-status { position: fixed; z-index: 30; right: 1.4vw; bottom: calc(var(--edge-height) + 1.2vh); display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--line); background: rgba(255, 253, 243, .94); color: var(--muted); font-size: .8rem; font-weight: 800; }
 .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #a7a7a7; }
 .online .status-dot { background: var(--flag); }

@@ -3,6 +3,7 @@
 // Records exact p50, p95, p99 acknowledgment latencies and duplicate integrity.
 
 import http from 'node:http';
+import https from 'node:https';
 
 const BASE_URL = process.env.BASE_URL || 'http://127.0.0.1:4173';
 const PARTICIPANT_COUNT = Number(process.env.TEST_PLAYERS || process.env.PARTICIPANTS || 500);
@@ -24,9 +25,10 @@ async function request(urlStr, options = {}) {
     headers['Content-Type'] = 'application/json';
   }
 
+  const lib = url.protocol === 'https:' ? https : http;
   const start = Date.now();
   return new Promise((resolve, reject) => {
-    const req = http.request(url, { method, headers }, res => {
+    const req = lib.request(url, { method, headers }, res => {
       let data = '';
       res.on('data', chunk => { data += chunk; });
       res.on('end', () => {
@@ -51,10 +53,20 @@ async function ensureOpenQuestion() {
     return stateRes.json;
   }
 
-  // If running against local dev server, authenticate as admin and open a rehearsal question
-  console.log('Session not in open state. Attempting to open question via dev admin...');
-  const authRes = await request(`${BASE_URL}/api/dev/admin`, { method: 'POST' });
-  const adminToken = authRes.json?.token || 'local-admin';
+  // Authenticate as admin to open a rehearsal question
+  console.log('Session not in open state. Attempting to authenticate as admin...');
+  let adminToken = process.env.ADMIN_TOKEN || null;
+  if (!adminToken && process.env.ADMIN_PIN) {
+    const loginRes = await request(`${BASE_URL}/api/admin/login`, {
+      method: 'POST',
+      body: { pin: process.env.ADMIN_PIN }
+    });
+    adminToken = loginRes.json?.token;
+  }
+  if (!adminToken) {
+    const authRes = await request(`${BASE_URL}/api/dev/admin`, { method: 'POST' });
+    adminToken = authRes.json?.token || 'local-admin';
+  }
 
   const statusRes = await request(`${BASE_URL}/api/admin/status`, {
     headers: { Authorization: `Bearer ${adminToken}` }
