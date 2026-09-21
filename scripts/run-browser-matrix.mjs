@@ -92,6 +92,27 @@ const chromeProc = spawn(chromePath, [
   'about:blank'
 ]);
 
+async function stopChrome() {
+  if (chromeProc.exitCode === null && chromeProc.signalCode === null) {
+    await new Promise(resolve => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      chromeProc.once('exit', done);
+      chromeProc.kill();
+      setTimeout(done, 1000);
+    });
+  }
+  try {
+    rmSync(chromeUserDataDir, { recursive: true, force: true });
+  } catch {
+    // Best-effort cleanup only. CI runners and OS temp cleanup will remove leftovers.
+  }
+}
+
 // Wait for CDP to respond
 let cdpAvailable = false;
 for (let i = 0; i < 20; i++) {
@@ -103,9 +124,8 @@ for (let i = 0; i < 20; i++) {
 }
 
 if (!cdpAvailable) {
-  chromeProc.kill();
+  await stopChrome();
   server.close();
-  rmSync(chromeUserDataDir, { recursive: true, force: true });
   throw new Error('Chrome CDP port did not become ready');
 }
 
@@ -497,9 +517,8 @@ for (const vp of matrix) {
 
 // Close browser and server
 ws.close();
-chromeProc.kill();
+await stopChrome();
 server.close();
-rmSync(chromeUserDataDir, { recursive: true, force: true });
 
 console.log('\n--- VIEWPORT MATRIX RESULTS ---');
 for (const r of results) {
