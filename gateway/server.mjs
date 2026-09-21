@@ -112,6 +112,7 @@ export async function notifyAuthorityDeadline(envelope,options={}){
   if(!response.ok){
     const error=new Error(body?.error||`Authority deadline callback failed (${response.status})`);
     error.status=response.status;
+    error.code=body?.code||null;
     error.retryAfterMs=Number(body?.retryAfterMs||0);
     throw error;
   }
@@ -156,17 +157,33 @@ export function startAuthoritySync(options={}){
       if(stopped)return;
       await refreshAuthorityState(baseUrl);
     }catch(error){
+      if(stopped||!isStillCurrent(envelope))return;
+
+      if(error.code==='DEADLINE_NOT_REACHED'&&Number(error.retryAfterMs)>0){
+        const delay=Math.max(10,Number(error.retryAfterMs)+25);
+        deadlineTimer=setTimeout(()=>{deadlineTimer=null;void fireDeadline(envelope,attempt)},delay);
+        deadlineTimer.unref?.();
+        return;
+      }
+
+      if(error.code==='STALE_DEADLINE'){
+        try{await refreshAuthorityState(baseUrl)}
+        catch(refreshError){
+          globalMetrics.recordError('AUTHORITY_SYNC');
+          console.error(formatLog('error','authority_sync_failed',{error:refreshError.message}));
+          scheduleReconcile(cachedEnvelope);
+        }
+        return;
+      }
+
       globalMetrics.recordError('AUTHORITY_DEADLINE');
       console.error(formatLog('error','authority_deadline_failed',{attempt:attempt+1,error:error.message}));
-      if(stopped||!isStillCurrent(envelope))return;
       if(attempt+1>=maxDeadlineAttempts){
         scheduleReconcile(cachedEnvelope);
         return;
       }
-      const requestedDelay=Number(error.retryAfterMs||0);
       const backoff=Math.min(retryBaseMs*(2**attempt),retryMaxMs);
-      const delay=requestedDelay>0?Math.min(Math.max(requestedDelay,10),retryMaxMs):backoff;
-      deadlineTimer=setTimeout(()=>{deadlineTimer=null;void fireDeadline(envelope,attempt+1)},delay);
+      deadlineTimer=setTimeout(()=>{deadlineTimer=null;void fireDeadline(envelope,attempt+1)},backoff);
       deadlineTimer.unref?.();
     }
   };
