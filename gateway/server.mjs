@@ -23,6 +23,7 @@ let cachedEnvelope = createStateEnvelope({
 
 export const sseClients = new Set();
 export const wsClients = new Set();
+let authoritySyncObserver = null;
 
 export function resetClients() {
   sseClients.clear();
@@ -39,6 +40,7 @@ export function setCachedEnvelope(envelope) {
 
 export function broadcastState(envelope) {
   cachedEnvelope = envelope;
+  authoritySyncObserver?.observe(envelope);
   const payload = `id: ${envelope.version}\nevent: state\ndata: ${JSON.stringify(envelope)}\n\n`;
   for (const client of sseClients) {
     try {
@@ -70,6 +72,13 @@ function comparableEnvelope(envelope){
   return JSON.stringify(stable);
 }
 
+const ACTIVE_RECONCILE_STATES = new Set(['preparing', 'open', 'locked']);
+
+function deadlineIdentity(envelope) {
+  if (!envelope?.sessionId || !envelope?.question?.id || !Number.isFinite(Number(envelope?.version))) return null;
+  return `${envelope.sessionId}:${envelope.question.id}:${Number(envelope.version)}`;
+}
+
 export async function refreshAuthorityState(baseUrl=process.env.AUTHORITY_BASE_URL||process.env.PUBLIC_EVENT_URL){
   const base=String(baseUrl||'').replace(/\/$/,'');
   if(!base)return null;
@@ -82,20 +91,158 @@ export async function refreshAuthorityState(baseUrl=process.env.AUTHORITY_BASE_U
   return envelope;
 }
 
+export async function notifyAuthorityDeadline(envelope,options={}){
+  const base=String(options.baseUrl||process.env.AUTHORITY_BASE_URL||process.env.PUBLIC_EVENT_URL||'').replace(/\/$/,'');
+  if(!base)throw new Error('Authority base URL is not configured');
+  const secret=String(options.secret||process.env.GATEWAY_ADMIN_SECRET||'');
+  if(!secret)throw new Error('Gateway admin secret is required for deadline callbacks');
+  if(!deadlineIdentity(envelope))throw new Error('Cannot schedule a deadline callback without session, question, and version');
+  const response=await fetch(`${base}/api/internal/deadline`,{
+    method:'POST',
+    headers:{Accept:'application/json',Authorization:`Bearer ${secret}`,'Content-Type':'application/json'},
+    body:JSON.stringify({
+      sessionId:envelope.sessionId,
+      questionId:envelope.question.id,
+      version:Number(envelope.version)
+    }),
+    signal:AbortSignal.timeout(Number(options.timeoutMs||5000))
+  });
+  let body={};
+  try{body=await response.json()}catch{}
+  if(!response.ok){
+    const error=new Error(body?.error||`Authority deadline callback failed (${response.status})`);
+    error.status=response.status;
+    error.code=body?.code||null;
+    error.retryAfterMs=Number(body?.retryAfterMs||0);
+    throw error;
+  }
+  return body;
+}
+
 export function startAuthoritySync(options={}){
   const baseUrl=options.baseUrl||process.env.AUTHORITY_BASE_URL||process.env.PUBLIC_EVENT_URL;
   if(!baseUrl)return null;
-  const intervalMs=Math.max(1000,Number(options.intervalMs||process.env.AUTHORITY_POLL_MS||2000));
-  let timer=null,stopped=false,running=false;
-  const run=async()=>{
-    if(stopped||running)return;
-    running=true;
-    try{await refreshAuthorityState(baseUrl)}
-    catch(error){globalMetrics.recordError('AUTHORITY_SYNC');console.error(formatLog('error','authority_sync_failed',{error:error.message}))}
-    finally{running=false;if(!stopped)timer=setTimeout(run,intervalMs)}
+
+  const secret=options.secret||process.env.GATEWAY_ADMIN_SECRET;
+  const reconcileMs=Math.max(10,Number(options.reconcileMs??process.env.AUTHORITY_RECONCILE_MS??60000));
+  const retryBaseMs=Math.max(10,Number(options.retryBaseMs??process.env.DEADLINE_RETRY_BASE_MS??1000));
+  const retryMaxMs=Math.max(retryBaseMs,Number(options.retryMaxMs??process.env.DEADLINE_RETRY_MAX_MS??10000));
+  const maxDeadlineAttempts=Math.max(1,Number(options.maxDeadlineAttempts??process.env.DEADLINE_RETRY_ATTEMPTS??8));
+
+  let deadlineTimer=null;
+  let reconcileTimer=null;
+  let stopped=false;
+  let reconciling=false;
+
+  const clearDeadline=()=>{if(deadlineTimer){clearTimeout(deadlineTimer);deadlineTimer=null}};
+  const clearReconcile=()=>{if(reconcileTimer){clearTimeout(reconcileTimer);reconcileTimer=null}};
+
+  const isStillCurrent=envelope=>{
+    const expected=deadlineIdentity(envelope);
+    return Boolean(expected&&cachedEnvelope?.state==='open'&&deadlineIdentity(cachedEnvelope)===expected);
   };
-  void run();
-  return {stop(){stopped=true;if(timer)clearTimeout(timer)}};
+
+  const scheduleReconcile=(envelope=cachedEnvelope)=>{
+    clearReconcile();
+    const hasLiveClients=sseClients.size+wsClients.size>0;
+    if(stopped||(!ACTIVE_RECONCILE_STATES.has(envelope?.state)&&!hasLiveClients))return;
+    reconcileTimer=setTimeout(()=>{reconcileTimer=null;void reconcileNow()},reconcileMs);
+    reconcileTimer.unref?.();
+  };
+
+  const fireDeadline=async(envelope,attempt=0)=>{
+    if(stopped||!isStillCurrent(envelope))return;
+    try{
+      await notifyAuthorityDeadline(envelope,{baseUrl,secret,timeoutMs:options.deadlineTimeoutMs});
+      if(stopped)return;
+      await refreshAuthorityState(baseUrl);
+    }catch(error){
+      if(stopped||!isStillCurrent(envelope))return;
+
+      if(error.code==='DEADLINE_NOT_REACHED'&&Number(error.retryAfterMs)>0){
+        const delay=Math.max(10,Number(error.retryAfterMs)+25);
+        deadlineTimer=setTimeout(()=>{deadlineTimer=null;void fireDeadline(envelope,attempt)},delay);
+        deadlineTimer.unref?.();
+        return;
+      }
+
+      if(error.code==='STALE_DEADLINE'){
+        try{await refreshAuthorityState(baseUrl)}
+        catch(refreshError){
+          globalMetrics.recordError('AUTHORITY_SYNC');
+          console.error(formatLog('error','authority_sync_failed',{error:refreshError.message}));
+          scheduleReconcile(cachedEnvelope);
+        }
+        return;
+      }
+
+      globalMetrics.recordError('AUTHORITY_DEADLINE');
+      console.error(formatLog('error','authority_deadline_failed',{attempt:attempt+1,error:error.message}));
+      if(attempt+1>=maxDeadlineAttempts){
+        scheduleReconcile(cachedEnvelope);
+        return;
+      }
+      const backoff=Math.min(retryBaseMs*(2**attempt),retryMaxMs);
+      deadlineTimer=setTimeout(()=>{deadlineTimer=null;void fireDeadline(envelope,attempt+1)},backoff);
+      deadlineTimer.unref?.();
+    }
+  };
+
+  const scheduleDeadline=envelope=>{
+    clearDeadline();
+    if(stopped||envelope?.state!=='open'||!deadlineIdentity(envelope))return;
+    const deadlineMs=new Date(envelope.deadlineAt||'').getTime();
+    if(!Number.isFinite(deadlineMs))return;
+    const delay=Math.max(0,deadlineMs-Date.now());
+    deadlineTimer=setTimeout(()=>{deadlineTimer=null;void fireDeadline(envelope,0)},delay);
+    deadlineTimer.unref?.();
+  };
+
+  const observe=envelope=>{
+    if(stopped)return;
+    scheduleDeadline(envelope);
+    scheduleReconcile(envelope);
+  };
+
+  const reconcileNow=async()=>{
+    if(stopped||reconciling)return;
+    reconciling=true;
+    try{
+      const envelope=await refreshAuthorityState(baseUrl);
+      if(envelope)observe(envelope);
+    }catch(error){
+      globalMetrics.recordError('AUTHORITY_SYNC');
+      console.error(formatLog('error','authority_sync_failed',{error:error.message}));
+    }finally{
+      reconciling=false;
+      if(!stopped)scheduleReconcile(cachedEnvelope);
+    }
+  };
+
+  let lastClientReconcileAt=0;
+  const controller={
+    observe,
+    reconcileNow,
+    clientActivity(){
+      if(stopped)return;
+      scheduleReconcile(cachedEnvelope);
+      const now=Date.now();
+      const minGapMs=Math.max(1000,Number(options.clientReconcileMinGapMs??10000));
+      if(now-lastClientReconcileAt<minGapMs)return;
+      lastClientReconcileAt=now;
+      void reconcileNow();
+    },
+    stop(){
+      stopped=true;
+      clearDeadline();
+      clearReconcile();
+      if(authoritySyncObserver===controller)authoritySyncObserver=null;
+    }
+  };
+
+  authoritySyncObserver=controller;
+  void reconcileNow();
+  return controller;
 }
 
 export function createSupabaseSink(url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY){
@@ -183,12 +330,14 @@ export function createGatewayServer(customQueue = null, options = {}) {
       res.write(`id: ${cachedEnvelope.version}\nevent: state\ndata: ${JSON.stringify(cachedEnvelope)}\n\n`);
       sseClients.add(res);
       globalMetrics.setActiveConnections(sseClients.size + wsClients.size);
+      authoritySyncObserver?.clientActivity?.();
       const heartbeat=setInterval(()=>{try{res.write(': keepalive\n\n')}catch{clearInterval(heartbeat)}},15000);
       heartbeat.unref?.();
       req.on('close', () => {
         clearInterval(heartbeat);
         sseClients.delete(res);
         globalMetrics.setActiveConnections(sseClients.size + wsClients.size);
+        authoritySyncObserver?.observe(cachedEnvelope);
       });
       return;
     }

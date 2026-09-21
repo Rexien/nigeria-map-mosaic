@@ -109,7 +109,8 @@ async function gatewayCall(path, envelope) {
       Authorization: `Bearer ${process.env.GATEWAY_ADMIN_SECRET || ''}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(envelope)
+    body: JSON.stringify(envelope),
+    signal: AbortSignal.timeout(path === 'lock-and-drain' ? 12000 : 4000)
   });
   if (!response.ok) throw Object.assign(new Error(`Live gateway ${path} failed (${response.status})`), { status: 503 });
   return response.json();
@@ -147,7 +148,19 @@ async function pushGatewayState() {
   if (!gatewayBase()) return;
   publicReads.clear();
   const response = await buildLiveState(true);
-  await gatewayCall('broadcast', JSON.parse(response.body));
+  const envelope = JSON.parse(response.body);
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await gatewayCall('broadcast', envelope);
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) {
+        await new Promise(resolve => setTimeout(resolve, 200 * (2 ** attempt)));
+      }
+    }
+  }
+  throw lastError;
 }
 
 async function finalizeReveal(session) {
@@ -176,6 +189,118 @@ async function autoRevealSession(session) {
     session = rows[0] || (await db(`live_sessions?id=eq.${session.id}&select=*`))[0];
   }
   return session?.state === 'locked' ? finalizeReveal(session) : session;
+}
+
+function secureSecretMatch(provided, expected) {
+  const a = Buffer.from(String(provided || ''));
+  const b = Buffer.from(String(expected || ''));
+  return a.length > 0 && a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+async function internalDeadline(e) {
+  const expectedSecret = process.env.GATEWAY_ADMIN_SECRET || '';
+  const providedSecret = bearer(e);
+  if (!expectedSecret || !secureSecretMatch(providedSecret, expectedSecret)) {
+    return json(401, { error: 'Unauthorized deadline callback' });
+  }
+
+  const body = JSON.parse(e.body || '{}');
+  const sessionId = clean(body.sessionId);
+  const questionId = clean(body.questionId);
+  const expectedVersion = Number(body.version);
+  if (!sessionId || !questionId || !Number.isInteger(expectedVersion) || expectedVersion < 1) {
+    return json(422, { error: 'sessionId, questionId, and integer version are required' });
+  }
+
+  let session = (await db(
+    `live_sessions?id=eq.${encodeURIComponent(sessionId)}&select=*`
+  ))[0];
+
+  if (!session) return json(404, { error: 'Live session not found' });
+
+  if (session.current_question_id !== questionId) {
+    return json(409, {
+      error: 'Stale deadline callback',
+      code: 'STALE_DEADLINE',
+      state: session.state,
+      version: session.version
+    });
+  }
+
+  if (['revealed', 'leaderboard', 'round_complete'].includes(session.state)) {
+    return json(200, {
+      finalized: true,
+      idempotent: true,
+      state: session.state,
+      version: session.version
+    });
+  }
+
+  const deadlineMs = new Date(session.deadline_at || '').getTime();
+  if (!Number.isFinite(deadlineMs)) {
+    return json(409, { error: 'Live session has no valid deadline', code: 'NO_DEADLINE' });
+  }
+
+  const now = Date.now();
+  if (now < deadlineMs) {
+    return json(409, {
+      error: 'Deadline has not been reached',
+      code: 'DEADLINE_NOT_REACHED',
+      retryAfterMs: Math.max(1, deadlineMs - now)
+    });
+  }
+
+  if (session.state === 'open') {
+    if (Number(session.version) !== expectedVersion) {
+      return json(409, {
+        error: 'Stale deadline callback',
+        code: 'STALE_DEADLINE',
+        state: session.state,
+        version: session.version
+      });
+    }
+
+    const rows = await db(
+      `live_sessions?id=eq.${encodeURIComponent(sessionId)}&state=eq.open&version=eq.${expectedVersion}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          state: 'locked',
+          updated_at: new Date().toISOString(),
+          version: expectedVersion + 1
+        })
+      }
+    );
+
+    session = rows[0] || (await db(
+      `live_sessions?id=eq.${encodeURIComponent(sessionId)}&select=*`
+    ))[0];
+  }
+
+  if (session?.state === 'locked') {
+    if (session.current_question_id !== questionId || Number(session.version) !== expectedVersion + 1) {
+      return json(409, {
+        error: 'Stale deadline callback',
+        code: 'STALE_DEADLINE',
+        state: session.state,
+        version: session.version
+      });
+    }
+    const revealed = await finalizeReveal(session);
+    return json(200, {
+      finalized: true,
+      idempotent: Number(session.version) !== expectedVersion + 1,
+      state: revealed.state,
+      version: revealed.version
+    });
+  }
+
+  return json(409, {
+    error: 'Deadline callback no longer applies to the current state',
+    code: 'STALE_DEADLINE',
+    state: session?.state,
+    version: session?.version
+  });
 }
 
 function bearer(e) {
@@ -664,6 +789,8 @@ export async function handler(e) {
         res = await approvedLens();
       } else if (method === 'GET' && route === 'leaderboard') {
         res = await leaderboard(e);
+      } else if (method === 'POST' && route === 'internal/deadline') {
+        res = await internalDeadline(e);
       } else if (route.startsWith('admin/')) {
         const admin = await verifyAdmin(e.headers?.authorization);
         if (method === 'GET') {
