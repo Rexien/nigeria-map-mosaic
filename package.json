@@ -13,7 +13,10 @@
     "content:import": "node scripts/import-content.mjs",
     "load": "k6 run load/answer-spike.js",
     "rehearsal:baseline": "node scripts/rehearsal-baseline.mjs",
-    "rehearsal:gateway": "node scripts/gateway-http-rehearsal.mjs"
+    "rehearsal:gateway": "node scripts/gateway-http-rehearsal.mjs",
+    "admin:hash-pin": "node scripts/hash-admin-pin.mjs"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }
