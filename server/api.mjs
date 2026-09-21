@@ -265,7 +265,7 @@ async function internalDeadline(e) {
   }
 
   if (session?.state === 'locked') {
-    if (session.current_question_id !== questionId) {
+    if (session.current_question_id !== questionId || Number(session.version) !== expectedVersion + 1) {
       return json(409, {
         error: 'Stale deadline callback',
         code: 'STALE_DEADLINE',
