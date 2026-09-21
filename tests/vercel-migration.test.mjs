@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import healthHandler from '../api/health.js';
-import catchAllHandler from '../api/[...path].js';
+import routerHandler from '../api/index.js';
 import { handler as authorityHandler, handleNodeRequest } from '../server/api.mjs';
 import { buildStatic } from '../scripts/build-static.mjs';
 import { createGatewayServer } from '../gateway/server.mjs';
@@ -71,16 +71,16 @@ test('Authority server/api.mjs handles health endpoint in handler and handleNode
   assert.equal(nodeBody.service, 'niac-live-authority');
 });
 
-test('Vercel catch-all api/[...path].js routes through handleNodeRequest', async () => {
+test('Vercel stable api/index.js router forwards rewritten API paths', async () => {
   const req = {
     method: 'GET',
-    url: '/api/health',
-    headers: { host: 'niac-live.vercel.app' },
-    query: { path: ['health'] }
+    url: '/api?path=health',
+    headers: { host: 'niaclive.vercel.app' },
+    query: { path: 'health' }
   };
   const res = createMockRes();
 
-  await catchAllHandler(req, res);
+  await routerHandler(req, res);
 
   assert.equal(res.statusCode, 200);
   const body = JSON.parse(res.body);
@@ -163,9 +163,10 @@ test('vercel.json configuration satisfies architecture rules', async () => {
   assert.ok(Array.isArray(vercelConfig.rewrites));
   const rewrites = vercelConfig.rewrites;
 
-  // Must NOT contain redundant /api/(.*) rewrite
-  const apiRewrite = rewrites.find(r => r.source && r.source.startsWith('/api'));
-  assert.equal(apiRewrite, undefined, 'vercel.json must NOT contain redundant /api rewrites');
+  // All public API paths must route through the stable /api function so nested admin routes work.
+  const apiRewrite = rewrites.find(r => r.source === '/api/:path*');
+  assert.ok(apiRewrite, 'vercel.json must route /api/:path* through the stable authority function');
+  assert.equal(apiRewrite.destination, '/api?path=:path*');
 
   // Must contain mapping for differing paths
   const lensLive = rewrites.find(r => r.source === '/lens/live');
