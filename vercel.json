@@ -6,11 +6,11 @@
   "rewrites": [
     {
       "source": "/lens/live",
-      "destination": "/lens-live.html"
+      "destination": "/lens-live"
     },
     {
       "source": "/admin/content",
-      "destination": "/admin-content.html"
+      "destination": "/admin-content"
     }
   ],
   "headers": [

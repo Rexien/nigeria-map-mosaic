@@ -170,11 +170,11 @@ test('vercel.json configuration satisfies architecture rules', async () => {
   // Must contain mapping for differing paths
   const lensLive = rewrites.find(r => r.source === '/lens/live');
   assert.ok(lensLive, 'Rewrite for /lens/live must exist');
-  assert.equal(lensLive.destination, '/lens-live.html');
+  assert.equal(lensLive.destination, '/lens-live');
 
   const adminContent = rewrites.find(r => r.source === '/admin/content');
   assert.ok(adminContent, 'Rewrite for /admin/content must exist');
-  assert.equal(adminContent.destination, '/admin-content.html');
+  assert.equal(adminContent.destination, '/admin-content');
 
   // Security and caching headers
   assert.ok(Array.isArray(vercelConfig.headers));

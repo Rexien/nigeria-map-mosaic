@@ -106,6 +106,21 @@ export function buildStatic(rootDir = ROOT_DIR, distDir = DIST_DIR) {
     }
   }
 
+  // 4b. Create nested path aliases for cleanUrls compatibility
+  const lensDir = path.join(distDir, 'lens');
+  fs.mkdirSync(lensDir, { recursive: true });
+  if (fs.existsSync(path.join(rootDir, 'lens-live.html'))) {
+    fs.copyFileSync(path.join(rootDir, 'lens-live.html'), path.join(lensDir, 'live.html'));
+    fileCount++;
+  }
+
+  const adminDir = path.join(distDir, 'admin');
+  fs.mkdirSync(adminDir, { recursive: true });
+  if (fs.existsSync(path.join(rootDir, 'admin-content.html'))) {
+    fs.copyFileSync(path.join(rootDir, 'admin-content.html'), path.join(adminDir, 'content.html'));
+    fileCount++;
+  }
+
   // 5. Verification / Isolation assertion
   for (const forbidden of FORBIDDEN_PATHS) {
     const checkPath = path.join(distDir, forbidden);
