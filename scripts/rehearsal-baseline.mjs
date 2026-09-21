@@ -109,7 +109,7 @@ async function runPlayer(vu, state) {
     body: { alias, rehearsal: true }
   });
 
-  if (joinRes.status !== 201 || !joinRes.json?.token) {
+  if ((joinRes.status !== 200 && joinRes.status !== 201) || !joinRes.json?.token) {
     return { vu, success: false, error: `Join failed: HTTP ${joinRes.status}` };
   }
 
