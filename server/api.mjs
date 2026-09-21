@@ -309,11 +309,11 @@ function bearer(e) {
 }
 
 async function adminLogin(e) {
-  rateLimit(clientIp(e), 'admin-login', 5, 10 * 60 * 1000);
   const body = JSON.parse(e.body || '{}');
   const pin = String(body.pin || '').trim();
 
   if (!/^\d{8}$/.test(pin) || !verifyAdminPin(pin)) {
+    rateLimit(clientIp(e), 'admin-login-failed', 5, 10 * 60 * 1000);
     return json(401, { error: 'Invalid control code.' });
   }
 
