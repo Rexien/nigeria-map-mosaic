@@ -115,7 +115,7 @@ async function stopChrome() {
 
 // Wait for CDP to respond
 let cdpAvailable = false;
-for (let i = 0; i < 20; i++) {
+for (let i = 0; i < 80; i++) {
   try {
     const res = await fetch(`http://127.0.0.1:${CDP_PORT}/json/version`);
     if (res.ok) { cdpAvailable = true; break; }
