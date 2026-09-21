@@ -583,7 +583,7 @@ async function adminData(e, admin) {
   const ev = await event();
   const session = (await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`))[0];
   const settings = (await db(`event_settings?event_id=eq.${ev.id}&select=*`))[0];
-  const questions = await db('quiz_questions?select=id,display_order,category,question,options,correct_option,duration_seconds,explanation,source,review_status,is_void,media,image_fallback,quiz_rounds(day,quiz_games(activity))&order=display_order.asc');
+  const questions = await db('quiz_questions?select=id,display_order,category,question,correct_option,duration_seconds,explanation,source,review_status,is_void,media,image_fallback,question_options(option_index,label),quiz_rounds(day,quiz_games(activity))&order=display_order.asc');
   const participantCount = ((await db(`participants?event_id=eq.${ev.id}&select=id`, { headers: { Prefer: 'count=exact' } }))?.length) || 0;
   const responseRow = session?.current_question_id ? (await db(`live_question_state?session_id=eq.${session.id}&question_id=eq.${session.current_question_id}&select=response_count`))[0] : null;
   const gateway = await gatewayHealth();
@@ -600,7 +600,7 @@ async function adminData(e, admin) {
       order: q.display_order,
       category: q.category,
       question: q.question,
-      options: q.options,
+      options: (q.question_options || []).slice().sort((a, b) => a.option_index - b.option_index).map(option => option.label),
       correctOption: q.correct_option,
       durationSeconds: q.duration_seconds,
       explanation: q.explanation,
@@ -657,7 +657,8 @@ async function updateQuestion(e, admin) {
     await db(`question_options?question_id=eq.${id}&option_index=eq.${i}`, { method: 'PATCH', body: JSON.stringify({ label: options[i] }) });
   }
   await audit(admin, ev, 'update_question', 'quiz_question', id, before, after);
-  return json(200, { question: after });
+  const saved = (await db(`quiz_questions?id=eq.${id}&select=*,question_options(option_index,label)`))[0] || after;
+  return json(200, { question: saved });
 }
 
 async function adminAction(e, admin) {
