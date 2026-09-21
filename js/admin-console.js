@@ -4,6 +4,28 @@
   const api=()=>window.NIACApi;
   const escape=value=>{const el=document.createElement('span');el.textContent=value??'';return el.innerHTML};
   const show=(el,text,isError=false)=>{if(!el)return;el.textContent=text||'';el.classList.toggle('error',isError);el.classList.toggle('success',Boolean(text)&&!isError)};
+  const errorText=err=>{
+    const values=[
+      err?.message,
+      err?.error_description,
+      err?.error?.message,
+      err?.error,
+      err?.details,
+      err?.hint
+    ];
+    for(const value of values){
+      if(typeof value==='string'&&value.trim())return value.trim();
+      if(value&&typeof value==='object'){
+        const nested=value.message||value.error_description||value.error||value.details;
+        if(typeof nested==='string'&&nested.trim())return nested.trim();
+      }
+    }
+    try{
+      const serialised=JSON.stringify(err);
+      if(serialised&&serialised!=='{}')return serialised;
+    }catch{}
+    return 'Sign-in failed. Check the event-team credentials and try again.';
+  };
   const localHost=()=>['127.0.0.1','localhost'].includes(location.hostname);
   const states={lobby:'Welcome screen',preparing:'Question ready',open:'Answers are open',locked:'Answers are closed',revealed:'Answer is showing',leaderboard:'Scores are showing',round_complete:'Round complete',paused:'Paused',ended:'Event ended'};
   const guidance={lobby:'Choose a question now. Press Open question only on the MC’s cue.',preparing:'Choose the question again and press Open question on the MC’s cue.',open:'The question is live. It will close and reveal automatically at zero.',locked:'Answers are closed. The result is being prepared.',revealed:'The answer and personal scores are showing. Open the next question or show Top 10.',leaderboard:'The Top 10 is on the projector. Choose the next question while the MC speaks.',round_complete:'Return to the welcome screen or end the event.',paused:'Everything is paused. Return to the welcome screen when ready.',ended:'The event is ended. Return to the welcome screen to begin again.'};
@@ -16,7 +38,7 @@
     if(!api().hasAdmin()&&localHost()){try{const result=await api().request('/dev/admin',{method:'POST'});api().setAdminToken(result.token)}catch{}}
     return api().hasAdmin();
   }
-  async function signIn(){const email=$('#admin-email').value,password=$('#admin-password').value;try{$('#admin-login-button').disabled=true;const {data,error}=await supabase.createClient(APP_CONFIG.SUPABASE_URL,APP_CONFIG.SUPABASE_ANON_KEY).auth.signInWithPassword({email,password});if(error)throw error;api().setAdminToken(data.session.access_token);location.reload()}catch(err){show($('#admin-login-message'),err.message,true)}finally{$('#admin-login-button').disabled=false}}
+  async function signIn(){const email=$('#admin-email').value,password=$('#admin-password').value;try{$('#admin-login-button').disabled=true;show($('#admin-login-message'),'');const {data,error}=await supabase.createClient(APP_CONFIG.SUPABASE_URL,APP_CONFIG.SUPABASE_ANON_KEY).auth.signInWithPassword({email,password});if(error)throw error;if(!data?.session?.access_token)throw new Error('Supabase did not return an admin session.');api().setAdminToken(data.session.access_token);location.reload()}catch(err){show($('#admin-login-message'),errorText(err),true)}finally{$('#admin-login-button').disabled=false}}
 
   let adminStatus;
   function applyAdminStatus(status){
