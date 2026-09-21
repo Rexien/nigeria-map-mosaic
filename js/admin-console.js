@@ -29,10 +29,10 @@
       if(badge){badge.className=`capacity-badge ${c.status}`;badge.textContent=c.status==='green'?'GREEN · Healthy':c.status==='amber'?'AMBER · Degraded':'RED · Overloaded';}
       if(desc)desc.textContent=c.statusReason||'System capacity normal.';
       const ack=$('#metric-ack-time'),q=$('#metric-queue-depth'),err=$('#metric-error-rate'),lag=$('#metric-loop-lag');
-      if(ack)ack.textContent=`${c.p50AckMs}ms / ${c.p95AckMs}ms`;
-      if(q)q.textContent=String(c.queueDepth);
-      if(err)err.textContent=`${c.errorRatePercent}%`;
-      if(lag)lag.textContent=`${c.eventLoopLagMs}ms`;
+      if(ack)ack.textContent=`${c.p50AckMs ?? 0}ms / ${c.p95AckMs ?? 0}ms`;
+      if(q)q.textContent=String(c.queueDepth ?? 0);
+      if(err)err.textContent=`${c.errorRatePercent ?? 0}%`;
+      if(lag)lag.textContent=`${c.eventLoopLagMs ?? 0}ms`;
     }
     if(status.metrics){
       const active = status.metrics.activeCount ?? status.metrics.participants ?? 0;

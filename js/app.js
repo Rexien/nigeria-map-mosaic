@@ -43,56 +43,114 @@
   function localPreview(){
     if(!['127.0.0.1','localhost'].includes(location.hostname))return null;
     const mode=new URLSearchParams(location.search).get('preview');if(!mode)return null;
-    const question={id:'layout-preview-question',activity:'passport',title:'Naija Passport Challenge',category:'Everyday Nigeria',question:'Which Nigerian tradition brings communities together through music, colour and celebration?',options:['A community festival with music and dance','A very long answer choice included to prove that text wraps cleanly without colliding','A quiet weekday routine','A private meeting with no audience'],correctOption:0,explanation:'Festivals across Nigeria bring together music, dance, clothing, food and community stories.',durationSeconds:30};
+    const now=Date.now();
+    const basePassport={id:'preview-passport-q1',activity:'passport',title:'Naija Passport Challenge',order:1,day:1,category:'Everyday Nigeria',question:'Which Nigerian tradition brings communities together through music, colour and celebration?',options:['A community festival with music and dance','A very long answer choice included to prove that text wraps cleanly without colliding','A quiet weekday routine','A private meeting with no audience'],correctOption:0,explanation:'Festivals across Nigeria bring together music, dance, clothing, food and community stories.',durationSeconds:30};
+    const mediaPassport={...basePassport,id:'preview-passport-q2',order:2,category:'Food and Drink',question:'Zobo is traditionally made from the dried flower calyces of which plant?',options:['Tamarind','Cocoa','Ginger','Hibiscus'],correctOption:3,explanation:'Zobo is brewed from dried hibiscus calyces, usually with spices or other flavourings.',media:{src:'/assets/trivia/10.jpg',alt:'Deep-red botanical calyx growing on a plant.',timing:'reveal'}};
+    const suyaPassport={...basePassport,id:'preview-passport-d2q4',order:4,day:2,category:'Food',question:'Suya is most closely associated with which cooking method?',options:['Steaming','Grilling','Boiling','Baking'],correctOption:1,explanation:'Suya consists of seasoned meat cooked over a grill or open heat.',media:{src:'/assets/trivia/09.jpg',alt:'Seasoned meat skewers prepared over open heat embers.',timing:'reveal'}};
+    const qMediaPassport={...basePassport,id:'preview-passport-q3',order:3,category:'Crafts',question:'Which traditional resist-dyed textile heritage is shown in this photograph?',options:['Adire','Aso-oke','Akwa-ocha','Kente'],correctOption:0,explanation:'Adire is the traditional Yoruba resist-dyed indigo textile produced in Abeokuta and across the South West.',media:{src:'/assets/trivia/01.jpg',alt:'Dark fabric with pale circular and geometric patterns.',timing:'question'}};
+
     if(mode==='welcome')return{data:{activity:'passport',screenMode:'welcome',state:'lobby',question:null,responseCount:0,serverNow:new Date().toISOString()},answerIndex:null};
+    if(mode==='leaderboard')return{data:{activity:'passport',screenMode:'activity',state:'leaderboard',question:basePassport,responseCount:0,serverNow:new Date().toISOString()},answerIndex:0};
     if(mode==='passport-standby'||mode==='decode-standby')return{data:{activity:mode==='decode-standby'?'decode':'passport',screenMode:'activity',state:'lobby',question:null,responseCount:0,serverNow:new Date().toISOString()},answerIndex:null};
-    if(mode==='decode'||mode==='decode-reveal'){
-      const q={id:'decode-preview',activity:'decode',title:'Decode the State',category:'South West',question:'Which Nigerian state do these clues describe?',options:['Ogun','Kano','Niger','Anambra'],correctOption:0,explanation:'Olumo Rock, Adire textile heritage, and Ojude Oba festival are iconic to Ogun State.',durationSeconds:30,clueNumber:3,clue:'Its capital Abeokuta is crowned by a legendary sacred granite fortress where Egba refugees found sanctuary in the 1830s.',cluesSoFar:['Famous for its sacred indigo-patterned tie-dye textile tradition, perfected over generations by women artisans using cassava resist paste and earthenware dye vats.','Celebrates the flamboyant annual Ojude Oba equestrian carnival on the third day of Eid-el-Kabir, where aristocratic horse-riding families parade in lavish velvet regalia before the Awujale.','Its capital Abeokuta is crowned by a legendary sacred granite fortress where Egba refugees found sanctuary in the 1830s.'],clueMediaSoFar:[{src:'/assets/decode/01.jpg',alt:'Artisan displaying indigo resist dyed fabric'},{src:'/assets/decode/02.jpg',alt:'Riders on decorated horses parading'},{src:'/assets/decode/03.jpg',alt:'Massive natural granite outcrop and historic shrine'}],highlightState:'Ogun'};
-      const isRev=mode==='decode-reveal';
-      return {data:{activity:'decode',screenMode:'activity',state:isRev?'revealed':'open',question:q,deadlineAt:new Date(Date.now()+30000).toISOString(),responseCount:0,serverNow:new Date().toISOString()},answerIndex:isRev?0:null};
-    }
-    const revealed=['reveal','wrong'].includes(mode),now=Date.now();
-    return{data:{activity:'passport',screenMode:'activity',state:revealed?'revealed':'open',question,deadlineAt:new Date(now+30000).toISOString(),responseCount:0,serverNow:new Date().toISOString()},answerIndex:mode==='wrong'?2:null};
+
+    // Passport states
+    if(mode==='passport-text'||mode==='text')return{data:{activity:'passport',screenMode:'activity',state:'open',question:basePassport,deadlineAt:new Date(now+25000).toISOString(),responseCount:12,serverNow:new Date().toISOString()},answerIndex:null};
+    if(mode==='passport-image'||mode==='image')return{data:{activity:'passport',screenMode:'activity',state:'open',question:qMediaPassport,deadlineAt:new Date(now+25000).toISOString(),responseCount:18,serverNow:new Date().toISOString()},answerIndex:null};
+    if(mode==='passport-answered'||mode==='answered')return{data:{activity:'passport',screenMode:'activity',state:'open',question:basePassport,deadlineAt:new Date(now+20000).toISOString(),responseCount:30,serverNow:new Date().toISOString()},answerIndex:0};
+    if(mode==='passport-timeout'||mode==='timeout')return{data:{activity:'passport',screenMode:'activity',state:'locked',question:basePassport,deadlineAt:new Date(now-1000).toISOString(),responseCount:42,serverNow:new Date().toISOString()},answerIndex:null};
+    if(mode==='passport-reveal-only')return{data:{activity:'passport',screenMode:'activity',state:'open',question:{...mediaPassport,media:null,imageUrl:null},deadlineAt:new Date(now+25000).toISOString(),responseCount:20,serverNow:new Date().toISOString()},answerIndex:null};
+    if(mode==='passport-reveal'||mode==='reveal')return{data:{activity:'passport',screenMode:'activity',state:'revealed',question:mediaPassport,deadlineAt:new Date(now-5000).toISOString(),responseCount:50,serverNow:new Date().toISOString()},answerIndex:3};
+    if(mode==='passport-suya'||mode==='suya')return{data:{activity:'passport',screenMode:'activity',state:'open',question:{...suyaPassport,media:null,imageUrl:null},deadlineAt:new Date(now+25000).toISOString(),responseCount:20,serverNow:new Date().toISOString()},answerIndex:null};
+    if(mode==='passport-suya-reveal'||mode==='suya-reveal')return{data:{activity:'passport',screenMode:'activity',state:'revealed',question:suyaPassport,deadlineAt:new Date(now-5000).toISOString(),responseCount:50,serverNow:new Date().toISOString()},answerIndex:1};
+
+    // Decode states
+    const decodeClues=['Famous for its sacred indigo-patterned tie-dye textile tradition, perfected over generations by women artisans using cassava resist paste and earthenware dye vats.','Celebrates the flamboyant annual Ojude Oba equestrian carnival on the third day of Eid-el-Kabir, where aristocratic horse-riding families parade in lavish velvet regalia before the Awujale.','Its capital Abeokuta is crowned by a legendary sacred granite fortress where Egba refugees found sanctuary in the 1830s.'];
+    const decodeMedia=[{src:'/assets/decode/01.jpg',alt:'Artisan displaying indigo resist dyed fabric'},{src:'/assets/decode/02.jpg',alt:'Riders on decorated horses parading'},{src:'/assets/decode/03.jpg',alt:'Massive natural granite outcrop and historic shrine'}];
+    const buildDecodeQ=(clueNum, isOpen, isRev)=>{
+      return {
+        id:'decode-preview',activity:'decode',title:'Decode the State',category:'South West',question:'Which Nigerian state do these clues describe?',options:isOpen||isRev?['Ogun','Kano','Niger','Anambra']:[],correctOption:isRev?0:undefined,explanation:isRev?'Olumo Rock, Adire textile heritage, and Ojude Oba festival are iconic to Ogun State.':undefined,durationSeconds:30,clueNumber:clueNum,clue:decodeClues[clueNum-1],cluesSoFar:decodeClues.slice(0,clueNum),clueMediaSoFar:decodeMedia.slice(0,clueNum),highlightState:isRev?'Ogun':null
+      };
+    };
+
+    if(mode==='decode-clue1')return{data:{activity:'decode',screenMode:'activity',state:'preparing',currentClue:1,question:buildDecodeQ(1,false,false),responseCount:0,serverNow:new Date().toISOString()},answerIndex:null};
+    if(mode==='decode-clue2')return{data:{activity:'decode',screenMode:'activity',state:'preparing',currentClue:2,question:buildDecodeQ(2,false,false),responseCount:0,serverNow:new Date().toISOString()},answerIndex:null};
+    if(mode==='decode-clue3')return{data:{activity:'decode',screenMode:'activity',state:'preparing',currentClue:3,question:buildDecodeQ(3,false,false),responseCount:0,serverNow:new Date().toISOString()},answerIndex:null};
+    if(mode==='decode'||mode==='decode-voting')return{data:{activity:'decode',screenMode:'activity',state:'open',currentClue:3,question:buildDecodeQ(3,true,false),deadlineAt:new Date(now+30000).toISOString(),responseCount:15,serverNow:new Date().toISOString()},answerIndex:null};
+    if(mode==='decode-answered')return{data:{activity:'decode',screenMode:'activity',state:'open',currentClue:3,question:buildDecodeQ(3,true,false),deadlineAt:new Date(now+20000).toISOString(),responseCount:25,serverNow:new Date().toISOString()},answerIndex:0};
+    if(mode==='decode-locked')return{data:{activity:'decode',screenMode:'activity',state:'locked',currentClue:3,question:buildDecodeQ(3,true,false),deadlineAt:new Date(now-1000).toISOString(),responseCount:40,serverNow:new Date().toISOString()},answerIndex:0};
+    if(mode==='decode-reveal')return{data:{activity:'decode',screenMode:'activity',state:'revealed',currentClue:3,question:buildDecodeQ(3,true,true),deadlineAt:new Date(now-5000).toISOString(),responseCount:45,serverNow:new Date().toISOString()},answerIndex:0};
+
+    const revealed=['reveal','wrong'].includes(mode);
+    return{data:{activity:'passport',screenMode:'activity',state:revealed?'revealed':'open',question:basePassport,deadlineAt:new Date(now+30000).toISOString(),responseCount:0,serverNow:new Date().toISOString()},answerIndex:mode==='wrong'?2:null};
   }
-  function playMediaHTML(q,revealed){
+  let lastPlayKey = '', lastDeadline = '', lastScoreFetchKey = '';
+  function playMediaHTML(q){
     const m=q.media||(q.imageUrl?{src:q.imageUrl,alt:q.altText,timing:'question'}:null);
     if(!m||!m.src)return '';
-    const caption=revealed&&m.caption?escape(m.caption):(m.timing==='question'?'Look closely at the photograph.':'');
-    const credit=revealed&&m.author?`Photo: ${escape(m.author)}${m.license?` (${escape(m.license)})`:''}`:'';
-    const fallback=escape(q.fallback||'Photograph unavailable. Use the written question to answer.');
+    const fallback='Image unavailable. Use the question/clue to continue.';
     return `<figure class="play-media-card">
       <div class="play-photo-container">
         <img src="${escape(m.src)}" alt="${escape(m.alt||'')}" class="question-image" decoding="async" onerror="this.closest('.play-media-card').classList.add('media-failed')">
         <div class="media-fallback-box"><p>${fallback}</p></div>
       </div>
-      ${caption||credit?`<figcaption class="play-media-caption"><span>${caption}</span>${credit?`<small class="play-media-credit">${credit}${m.licenseUrl?` · <a href="${escape(m.licenseUrl)}" target="_blank" rel="noopener noreferrer">License</a>`:''}</small>`:''}</figcaption>`:''}
     </figure>`;
   }
-  function displayMediaHTML(q,revealed){
+  function displayMediaHTML(q){
     const m=q.media||(q.imageUrl?{src:q.imageUrl,alt:q.altText,timing:'question'}:null);
     if(!m||!m.src)return '';
-    const caption=revealed&&m.caption?escape(m.caption):(m.timing==='question'?'Look closely at the photograph.':'');
-    const credit=revealed&&m.author?`Photo: ${escape(m.author)}${m.license?` · ${escape(m.license)}`:''}`:'';
-    const fallback=escape(q.fallback||'Photograph unavailable. Use the written question to answer.');
-    return `<figure class="display-media-card">
-      <div class="display-media-wrap">
-        <img src="${escape(m.src)}" alt="${escape(m.alt||'')}" class="display-photo" decoding="async" onerror="this.closest('.display-media-card').classList.add('media-failed')">
-        <div class="display-media-fallback"><p>${fallback}</p></div>
-      </div>
-      ${caption||credit?`<figcaption class="display-media-caption"><span>${caption}</span>${credit?`<small class="display-media-credit">${credit}</small>`:''}</figcaption>`:''}
-    </figure>`;
+    const fallback='Image unavailable. Use the question/clue to continue.';
+    return `<div class="display-media-wrap">
+      <img src="${escape(m.src)}" alt="${escape(m.alt||'')}" class="display-photo" decoding="async" onerror="this.closest('.display-media-wrap, .reveal-photo-column').classList.add('media-failed')">
+      <div class="display-media-fallback"><p>${fallback}</p></div>
+    </div>`;
   }
   function renderPlay(s){
-    const root=$('#play-root');if(!root)return;const prior=s.question&&JSON.parse(localStorage.getItem(`niac-answer-${s.question.id}`)||'null');
+    const root=$('#play-root');if(!root)return;
+    const prior=s.question&&JSON.parse(localStorage.getItem(`niac-answer-${s.question.id}`)||'null');
     const isDecodePrep=s.activity==='decode'&&s.state==='preparing'&&Boolean(s.question);
     const visible=s.question&&(['open','locked','revealed','leaderboard'].includes(s.state)||isDecodePrep);
-    if(!visible){root.innerHTML=`<div class="panel"><p class="eyebrow">${escape(s.question?.title||(s.activity==='decode'?'Decode the State':'Naija Passport Challenge'))}</p><h1>${s.state==='paused'?'The host has paused the activity':'Waiting for the next question'}</h1><p class="muted">Keep this screen open. It will update when the host is ready.</p></div>`;return}
-    const q=s.question,revealed=['revealed','leaderboard'].includes(s.state),answered=Number.isInteger(prior?.optionIndex),isCorrect=answered&&q.correctOption===prior.optionIndex;
     const isSpectator=Boolean(api().getProfile()?.isSpectator);
+
+    if(!visible){
+      const emptyKey = `empty|${s.state}|${s.activity}|${s.question?.id}`;
+      if(emptyKey !== lastPlayKey){
+        lastPlayKey = emptyKey;
+        root.innerHTML=`<div class="panel"><p class="eyebrow">${escape(s.question?.title||(s.activity==='decode'?'Decode the State':'Naija Passport Challenge'))}</p><h1>${s.state==='paused'?'The host has paused the activity':'Waiting for the next question'}</h1><p class="muted">Keep this screen open. It will update when the host is ready.</p></div>`;
+      }
+      return;
+    }
+
+    const q=s.question,revealed=['revealed','leaderboard'].includes(s.state),answered=Number.isInteger(prior?.optionIndex),isCorrect=answered&&q.correctOption===prior.optionIndex;
     const isDecode=q.activity==='decode';
+    const clueNum=q.clueNumber||s.currentClue||1;
+    const priorOption = prior?.optionIndex ?? 'none';
+    const priorConfirmed = Boolean(prior?.confirmed);
+    const priorSpectator = Boolean(prior?.spectator);
+
+    const playKey = [
+      s.activity,
+      s.state,
+      q.id,
+      clueNum,
+      isDecodePrep,
+      revealed,
+      priorOption,
+      priorConfirmed,
+      priorSpectator,
+      isSpectator
+    ].join('|');
+
+    if(playKey === lastPlayKey){
+      if(s.deadlineAt !== lastDeadline){
+        lastDeadline = s.deadlineAt;
+        startClock(s, isSpectator);
+      }
+      return;
+    }
+    lastPlayKey = playKey;
+    lastDeadline = s.deadlineAt;
 
     if(isDecodePrep){
-      const clueNum=q.clueNumber||1;
       root.innerHTML=`<div class="panel play-panel decode-preparing-panel"><div class="question-meta"><span>Decode the State · Clue ${clueNum} of 3</span>${isSpectator?'<span class="spectator-badge">Spectator view</span>':''}</div><h1>${escape(q.clue||q.question)}</h1><div class="decode-clue-stepper" aria-label="Clue progression" style="display:flex;gap:8px;margin:12px 0 16px"><span class="badge ${clueNum>=1?'is-live':''}" style="padding:4px 10px;border-radius:6px;border:1px solid #d4af37;background:${clueNum===1?'#d4af37':'rgba(212,175,55,0.2)'};color:${clueNum===1?'#0c1a12':'#f3e5ab'};font-weight:700">Clue 1${clueNum===1?' (Showing)':''}</span><span class="badge ${clueNum>=2?'is-live':''}" style="padding:4px 10px;border-radius:6px;border:1px solid #d4af37;background:${clueNum===2?'#d4af37':'rgba(212,175,55,0.2)'};color:${clueNum===2?'#0c1a12':'#f3e5ab'};font-weight:700">Clue 2${clueNum===2?' (Showing)':''}</span><span class="badge ${clueNum>=3?'is-live':''}" style="padding:4px 10px;border-radius:6px;border:1px solid #d4af37;background:${clueNum===3?'#d4af37':'rgba(212,175,55,0.2)'};color:${clueNum===3?'#0c1a12':'#f3e5ab'};font-weight:700">Clue 3${clueNum===3?' (Showing)':''}</span></div>${playMediaHTML(q,false)}<div class="notice decode-notice" role="status"><strong>Watch the main screen!</strong><span>Clue ${clueNum} of 3 is on the main screen. The state choices and interactive map will open for voting after Clue 3.</span></div><p id="personal-live-score" class="muted"></p></div>`;
       updateLiveScore('decode');
       return;
@@ -103,20 +161,54 @@
     const correct=`${String.fromCharCode(65+q.correctOption)}. ${escape(q.options[q.correctOption])}${isDecode?' State':''}`;
     const resultCopy=isCorrect?`You chose ${correct}.`:answered?`You chose ${picked}. The correct answer is ${correct}.`:`The correct answer is ${correct}.`;
 
-    const cluesGalleryHTML = isDecode && q.cluesSoFar && q.cluesSoFar.length > 0 ? `
-      <div class="decode-clues-strip" role="group" aria-label="State Clues">
-        ${q.cluesSoFar.map((c, i) => {
-          const m = (q.clueMediaSoFar && q.clueMediaSoFar[i]) || (i === (q.clueNumber-1) ? q.media : null);
-          return `<div class="decode-clue-item">
-            <div class="decode-clue-img-wrap">
-              ${m?.src ? `<img src="${escape(m.src)}" alt="${escape(m.alt||'')}" class="decode-clue-img">` : ''}
-            </div>
-            <div class="decode-clue-label"><strong>Clue ${i+1}:</strong> ${escape(c)}</div>
-          </div>`;
-        }).join('')}
+    // Mobile Decode: Compact clue tabs so answer options A-D are immediately visible above the fold
+    const activeClueIdx = Math.max(0, (q.cluesSoFar?.length || 1) - 1);
+    const decodeCluesHTML = isDecode && q.cluesSoFar && q.cluesSoFar.length > 0 ? `
+      <div class="decode-voting-clues" role="region" aria-label="Clues so far">
+        <div class="decode-clue-tabs">
+          ${q.cluesSoFar.map((c, i) => `<button type="button" class="clue-tab ${i===activeClueIdx?'is-active':''}" data-clue-idx="${i}">Clue ${i+1}${i===activeClueIdx?' (Latest)':''}</button>`).join('')}
+        </div>
+        <div class="decode-active-clue-preview" id="decode-active-clue-text">${escape(q.cluesSoFar[activeClueIdx])}</div>
       </div>` : playMediaHTML(q, revealed);
 
-    root.innerHTML=`<div class="panel play-panel ${isDecode?'is-decode-play':''}"><div class="question-meta"><span>${escape(q.category)} · ${isDecode?'Mystery State':('Question '+(q.order||''))}</span>${isSpectator?'<span class="spectator-badge">Spectator view</span>':''}<strong class="timer" id="timer" aria-label="Seconds remaining">${remaining(s)}</strong></div><h1>${escape(isDecode?'Which Nigerian state do these clues describe?':(q.clue||q.question))}</h1>${cluesGalleryHTML}${isDecode?'<div id="play-map-container"></div>':''}<div class="answers">${q.options.map((o,i)=>`<button class="answer ${prior?.optionIndex===i?'selected':''} ${prior?.confirmed?'confirmed':''} ${revealed&&q.correctOption===i?'correct':''} ${revealed&&answered&&prior.optionIndex===i&&!isCorrect?'incorrect':''}" data-option="${i}" ${s.state!=='open'||prior?'disabled':''}>${String.fromCharCode(65+i)}. ${escape(o)}${isDecode?' State':''}</button>`).join('')}</div><p id="answer-message" class="muted" aria-live="polite">${prior?.confirmed?(prior?.spectator||isSpectator?'Answer recorded · Spectator mode':'Answer received — locked in.'):prior&&s.state==='open'?'Connection interrupted — keeping your answer and retrying.':s.state==='open'?(isSpectator?'Choose one answer for interactive practice (Spectator mode).':'Tap a state on the map or choose below. Once received, it cannot be changed.'):'Answers are closed.'}</p>${revealed?`<div class="notice result-notice ${isCorrect?'result-correct':'result-wrong'}" role="status"><strong>${resultTitle}</strong><span>${resultCopy}</span><small>${escape(q.explanation||'')}</small></div>`:''}<p id="personal-live-score" class="muted"></p></div>`;
+    const questionNumberLabel = isDecode ? 'Mystery State' : (q.order ? `Question ${q.order}` : 'Trivia');
+    const timerHTML = !isSpectator && s.state === 'open' ? `<strong class="timer" id="timer" aria-label="Seconds remaining">${remaining(s)}</strong>` : '';
+
+    root.innerHTML=`<div class="panel play-panel ${isDecode?'is-decode-play':''}">
+      <div class="question-meta">
+        <span>${escape(q.category)} · ${questionNumberLabel}</span>
+        ${isSpectator?'<span class="spectator-badge">Spectator view</span>':''}
+        ${timerHTML}
+      </div>
+      <h1>${escape(isDecode?'Which Nigerian state do these clues describe?':(q.clue||q.question))}</h1>
+      ${revealed?`<div class="notice result-notice ${isCorrect?'result-correct':'result-wrong'}" role="status"><strong>${resultTitle}</strong><span>${resultCopy}</span><small>${escape(q.explanation||'')}</small></div>`:''}
+      ${decodeCluesHTML}
+      <div class="answers">
+        ${q.options.map((o,i)=>`<button class="answer ${prior?.optionIndex===i?'selected':''} ${prior?.confirmed?'confirmed':''} ${revealed&&q.correctOption===i?'correct':''} ${revealed&&answered&&prior.optionIndex===i&&!isCorrect?'incorrect':''}" data-option="${i}" ${s.state!=='open'||prior?'disabled':''}>${String.fromCharCode(65+i)}. ${escape(o)}${isDecode?' State':''}</button>`).join('')}
+      </div>
+      ${isDecode ? `
+        <details class="decode-map-drawer">
+          <summary class="decode-map-toggle"><span>Explore State Map</span></summary>
+          <div id="play-map-container"></div>
+        </details>
+      ` : ''}
+      <p id="answer-message" class="muted" aria-live="polite">${prior?.confirmed?(prior?.spectator||isSpectator?'Answer recorded · Spectator mode':'Answer received — locked in.'):prior&&s.state==='open'?'Connection interrupted — keeping your answer and retrying.':s.state==='open'?(isSpectator?'Choose one answer for interactive practice (Spectator mode).':'Select your answer above. Once received, it cannot be changed.'):'Answers are closed.'}</p>
+      <p id="personal-live-score" class="muted"></p>
+    </div>`;
+
+    if(isDecode && q.cluesSoFar){
+      $$('.clue-tab', root).forEach(tab => {
+        tab.addEventListener('click', e => {
+          e.preventDefault();
+          const idx = Number(tab.dataset.clueIdx);
+          $$('.clue-tab', root).forEach(t => t.classList.toggle('is-active', t === tab));
+          const previewEl = $('#decode-active-clue-text', root);
+          if (previewEl && q.cluesSoFar[idx]) {
+            previewEl.textContent = q.cluesSoFar[idx];
+          }
+        });
+      });
+    }
 
     if(isDecode && window.NigeriaStatesMap){
       const mapWrap=$('#play-map-container',root);
@@ -133,25 +225,132 @@
       }
     }
 
-    $$('.answer',root).forEach(b=>b.addEventListener('click',()=>submitAnswer(Number(b.dataset.option),s),{once:true}));startClock(s);updateLiveScore(q.activity);if(prior&&!prior.confirmed&&s.state==='open')retryPending(prior,s)
+    $$('.answer',root).forEach(b=>b.addEventListener('click',()=>submitAnswer(Number(b.dataset.option),s),{once:true}));
+    startClock(s, isSpectator);
+    updateLiveScore(q.activity, revealed);
+    if(prior&&!prior.confirmed&&s.state==='open')retryPending(prior,s);
   }
-  async function updateLiveScore(activity){try{const d=await api().request('/me'),el=$('#personal-live-score');if(el){if(el.parentElement?.querySelector('.notice'))el.parentElement.querySelector('h1')?.after(el);el.textContent=d.isSpectator?'Spectator mode · Interactive practice only':activity==='decode'?`Your Decode score: ${d.scores.decode} points`:`Your total: ${d.scores.combined.toLocaleString()} points · Current rank: #${d.rank}`}}catch{}}
-  function startClock(s){clearInterval(clockTimer);const tick=()=>{const left=remaining(s),el=$('#timer');if(el)el.textContent=left;if(left===0&&s.state==='open'){$$('.answer').forEach(b=>b.disabled=true);const note=$('#answer-message');if(note&&!localStorage.getItem(`niac-answer-${s.question.id}`))message(note,'Time is up — waiting for the answer reveal.')}};tick();clockTimer=setInterval(tick,250)}
+  async function updateLiveScore(activity, force = false){
+    const scoreKey = `${activity}|${currentState?.state}|${currentState?.question?.id}`;
+    if(!force && lastScoreFetchKey === scoreKey && currentState?.state !== 'revealed') return;
+    try{
+      const d=await api().request('/me'),el=$('#personal-live-score');
+      lastScoreFetchKey = scoreKey;
+      if(el){
+        if(el.parentElement?.querySelector('.notice'))el.parentElement.querySelector('h1')?.after(el);
+        el.textContent=d.isSpectator?'Spectator mode · Interactive practice only':activity==='decode'?`Your Decode score: ${d.scores.decode} points`:`Your total: ${d.scores.combined.toLocaleString()} points · Current rank: #${d.rank}`;
+      }
+    }catch{}
+  }
+  function startClock(s, isSpectator = false){
+    clearInterval(clockTimer);
+    if(isSpectator) return;
+    const tick=()=>{
+      const left=remaining(s),el=$('#timer');
+      if(el)el.textContent=left;
+      if(left===0&&s.state==='open'){
+        $$('.answer').forEach(b=>b.disabled=true);
+        const note=$('#answer-message');
+        if(note&&!localStorage.getItem(`niac-answer-${s.question.id}`))message(note,'Time is up — waiting for the answer reveal.');
+      }
+    };
+    tick();
+    clockTimer=setInterval(tick,250);
+  }
   async function submitAnswer(optionIndex,s){
-    const buttons=$$('.answer');if(buttons.some(button=>button.disabled))return;buttons.forEach((b,i)=>{b.classList.toggle('selected',i===optionIndex);b.disabled=true});message($('#answer-message'),'Sending your answer…');
-    if(s.activity==='decode'&&window.NigeriaStatesMap){const mapWrap=$('#play-map-container');if(mapWrap)window.NigeriaStatesMap.renderMap({container:mapWrap,options:s.question.options,selectedOption:optionIndex,interactive:false})}
-    const key=`niac-answer-${s.question.id}`,pending={optionIndex,idempotencyKey:crypto.randomUUID(),confirmed:false};localStorage.setItem(key,JSON.stringify(pending));
-    try{const res=await api().request('/answers',{method:'POST',body:{sessionId:s.sessionId,questionId:s.question.id,optionIndex,idempotencyKey:pending.idempotencyKey}});pending.confirmed=true;if(res?.spectator||api().getProfile()?.isSpectator)pending.spectator=true;localStorage.setItem(key,JSON.stringify(pending));message($('#answer-message'),pending.spectator?'Practice answer only · Spectator mode':'Answer received — locked in.')}
-    catch(err){if(err.code==='ANSWER_LATE'||err.code==='QUESTION_NOT_OPEN'){localStorage.removeItem(key);message($('#answer-message'),'Answers are closed. Your answer was not counted.',true)}else message($('#answer-message'),'Connection interrupted — your choice is saved and will retry automatically.',true)}
+    const buttons=$$('.answer');if(buttons.some(button=>button.disabled))return;
+    buttons.forEach((b,i)=>{b.classList.toggle('selected',i===optionIndex);b.disabled=true});
+    message($('#answer-message'),'Sending your answer…');
+    if(s.activity==='decode'&&window.NigeriaStatesMap){
+      const mapWrap=$('#play-map-container');
+      if(mapWrap)window.NigeriaStatesMap.renderMap({container:mapWrap,options:s.question.options,selectedOption:optionIndex,interactive:false});
+    }
+    const key=`niac-answer-${s.question.id}`,pending={optionIndex,idempotencyKey:crypto.randomUUID(),confirmed:false};
+    localStorage.setItem(key,JSON.stringify(pending));
+
+    // Update structural key so duplicate state does not wipe selection
+    const clueNum = s.question.clueNumber||s.currentClue||1;
+    const isSpectator = Boolean(api().getProfile()?.isSpectator);
+    lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, optionIndex, false, false, isSpectator].join('|');
+
+    try{
+      const res=await api().request('/answers',{method:'POST',body:{sessionId:s.sessionId,questionId:s.question.id,optionIndex,idempotencyKey:pending.idempotencyKey}});
+      pending.confirmed=true;
+      if(res?.spectator||api().getProfile()?.isSpectator)pending.spectator=true;
+      localStorage.setItem(key,JSON.stringify(pending));
+      // In-place confirmation update
+      buttons.forEach(b=>{if(b.classList.contains('selected'))b.classList.add('confirmed')});
+      lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, optionIndex, true, Boolean(pending.spectator), isSpectator].join('|');
+      message($('#answer-message'),pending.spectator?'Practice answer only · Spectator mode':'Answer received — locked in.');
+    }
+    catch(err){
+      if(err.code==='ANSWER_LATE'||err.code==='QUESTION_NOT_OPEN'){
+        localStorage.removeItem(key);
+        message($('#answer-message'),'Answers are closed. Your answer was not counted.',true);
+      }else message($('#answer-message'),'Connection interrupted — your choice is saved and will retry automatically.',true);
+    }
   }
-  async function retryPending(pending,s){const key=`niac-answer-${s.question.id}`;if(retrying.has(key)||remaining(s)<=0)return;retrying.add(key);try{const res=await api().request('/answers',{method:'POST',body:{sessionId:s.sessionId,questionId:s.question.id,optionIndex:pending.optionIndex,idempotencyKey:pending.idempotencyKey}});pending.confirmed=true;if(res?.spectator||api().getProfile()?.isSpectator)pending.spectator=true;localStorage.setItem(key,JSON.stringify(pending));message($('#answer-message'),pending.spectator?'Answer recorded · Spectator mode':'Answer confirmed by the server.')}catch(err){if(err.code==='ANSWER_LATE'||err.code==='QUESTION_NOT_OPEN')localStorage.removeItem(key);message($('#answer-message'),err.message,true)}finally{retrying.delete(key)}}
-  function initPlay(){const preview=localPreview();if(preview){if(Number.isInteger(preview.answerIndex))localStorage.setItem(`niac-answer-${preview.data.question.id}`,JSON.stringify({optionIndex:preview.answerIndex,confirmed:true}));applyState(preview.data);return}if(!guard())return;if(window.NIACTransport){window.NIACTransport.onState(applyState);window.NIACTransport.init()}loadState();setInterval(loadState,1500);window.addEventListener('online',loadState);document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadState()})}
+  async function retryPending(pending,s){
+    const key=`niac-answer-${s.question.id}`;if(retrying.has(key)||remaining(s)<=0)return;retrying.add(key);
+    try{
+      const res=await api().request('/answers',{method:'POST',body:{sessionId:s.sessionId,questionId:s.question.id,optionIndex:pending.optionIndex,idempotencyKey:pending.idempotencyKey}});
+      pending.confirmed=true;if(res?.spectator||api().getProfile()?.isSpectator)pending.spectator=true;
+      localStorage.setItem(key,JSON.stringify(pending));
+      $$('.answer').forEach(b=>{if(b.classList.contains('selected'))b.classList.add('confirmed')});
+      const clueNum = s.question.clueNumber||s.currentClue||1;
+      const isSpectator = Boolean(api().getProfile()?.isSpectator);
+      lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, pending.optionIndex, true, Boolean(pending.spectator), isSpectator].join('|');
+      message($('#answer-message'),pending.spectator?'Answer recorded · Spectator mode':'Answer confirmed by the server.');
+    }catch(err){
+      if(err.code==='ANSWER_LATE'||err.code==='QUESTION_NOT_OPEN')localStorage.removeItem(key);
+      message($('#answer-message'),err.message,true);
+    }finally{retrying.delete(key);}
+  }
+  function initPlay(){
+    const preview=localPreview();
+    if(preview){
+      if(Number.isInteger(preview.answerIndex))localStorage.setItem(`niac-answer-${preview.data.question.id}`,JSON.stringify({optionIndex:preview.answerIndex,confirmed:true}));
+      applyState(preview.data);
+      return;
+    }
+    if(!guard())return;
+    if(window.NIACTransport){
+      window.NIACTransport.onState(applyState);
+      window.NIACTransport.init();
+      window.addEventListener('online',()=>window.NIACTransport.refreshNow());
+      document.addEventListener('visibilitychange',()=>{if(!document.hidden)window.NIACTransport.refreshNow()});
+    } else {
+      loadState();
+      setInterval(loadState,2000);
+      window.addEventListener('online',loadState);
+      document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadState()});
+    }
+  }
   async function initPassport(){if(!guard())return;try{const d=await api().request('/me');$('#passport-name').textContent=d.participant.alias;['day1','day2','combined','decode'].forEach(k=>$('#score-'+k).textContent=d.scores[k]);$('#score-rank').textContent=`#${d.rank}`;const earned=new Set(d.stamps.map(x=>x.category));$$('.stamp').forEach(x=>x.classList.toggle('earned',earned.has(x.dataset.category)))}catch(err){message($('#passport-message'),err.message,true)}}
   function renderDisplay(s){
-    const root=$('#display-root');if(!root)return;const isDecodePrep=s.activity==='decode'&&s.state==='preparing'&&Boolean(s.question);const mode=s.screenMode||'welcome';const key=[mode,s.activity,s.state,s.question?.id,s.deadlineAt,s.currentClue,isDecodePrep].join('|');if(key===lastDisplayKey)return;lastDisplayKey=key;
-    if(mode==='welcome'){const joinUrl=location.origin+'/';const qr=`https://api.qrserver.com/v1/create-qr-code/?size=420x420&margin=12&data=${encodeURIComponent(joinUrl)}`;root.innerHTML=`<section class="display-welcome"><div class="welcome-copy"><p class="welcome-kicker">Shell Companies in Nigeria</p><h1>NIAC<br>Live <span class="year-badge">26</span></h1><p class="welcome-theme">Timeless Nigeria: Roots, Realities & Renewals</p><p class="welcome-dates">29–30 September 2026</p></div><div class="join-box"><div class="qr-placeholder"><span>Join at<br>${escape(location.host)}</span><img src="${qr}" alt="QR code to join NIAC Live"></div><strong>Scan to join</strong><span class="join-url">${escape(location.host)}</span></div></section>`;$('.qr-placeholder img')?.addEventListener('error',e=>e.currentTarget.remove());return}
-    if(s.activity==='lens'){if(!$('#lens-projector-frame',root))root.innerHTML='<iframe id="lens-projector-frame" class="lens-projector-frame" src="/lens/live?embed=1" title="Nigeria Through Your Lens live mosaic"></iframe>';return}
-    if(!s.question){const name=s.activity==='decode'?'Decode the State':'Naija Passport Challenge';root.innerHTML=`<section class="display-standby"><div class="standby-content"><p class="welcome-kicker">Shell Companies in Nigeria</p><h1>${name}</h1><p>Next question coming up</p></div></section>`;return}
+    const root=$('#display-root');if(!root)return;
+    const isDecodePrep=s.activity==='decode'&&s.state==='preparing'&&Boolean(s.question);
+    const mode=s.screenMode||'welcome';
+    const key=[mode,s.activity,s.state,s.question?.id,s.deadlineAt,s.currentClue,isDecodePrep].join('|');
+    if(key===lastDisplayKey)return;
+    lastDisplayKey=key;
+
+    if(mode==='welcome'){
+      const joinUrl=location.origin+'/';
+      const qr=`https://api.qrserver.com/v1/create-qr-code/?size=420x420&margin=12&data=${encodeURIComponent(joinUrl)}`;
+      root.innerHTML=`<section class="display-welcome"><div class="welcome-copy"><p class="welcome-kicker">Shell Companies in Nigeria</p><h1>NIAC<br>Live <span class="year-badge">26</span></h1><p class="welcome-theme">Timeless Nigeria: Roots, Realities & Renewals</p><p class="welcome-dates">29–30 September 2026</p></div><div class="join-box"><div class="qr-placeholder"><span>Join at<br>${escape(location.host)}</span><img src="${qr}" alt="QR code to join NIAC Live"></div><strong>Scan to join</strong><span class="join-url">${escape(location.host)}</span></div></section>`;
+      $('.qr-placeholder img')?.addEventListener('error',e=>e.currentTarget.remove());
+      return;
+    }
+    if(s.activity==='lens'){
+      if(!$('#lens-projector-frame',root))root.innerHTML='<iframe id="lens-projector-frame" class="lens-projector-frame" src="/lens/live?embed=1" title="Nigeria Through Your Lens live mosaic"></iframe>';
+      return;
+    }
+    if(!s.question){
+      const name=s.activity==='decode'?'Decode the State':'Naija Passport Challenge';
+      root.innerHTML=`<section class="display-standby"><div class="standby-content"><p class="welcome-kicker">Shell Companies in Nigeria</p><h1>${name}</h1><p>Next question coming up</p></div></section>`;
+      return;
+    }
     const q=s.question,reveal=['revealed','leaderboard'].includes(s.state),stateLabel=s.state==='open'?'Answers open':s.state==='locked'?'Answers closed':isDecodePrep?`Clue ${q.clueNumber||1} showing`:'Answer revealed';
 
     if(isDecodePrep){
@@ -161,7 +360,7 @@
     }
 
     if(q.activity==='decode'){
-      root.innerHTML=`<section class="display-question is-decode ${reveal?'is-revealed':'is-live-question'}"><header><div class="display-brand"><span class="display-brand-mark">NG</span><span>Decode the State</span></div><strong class="display-category">${reveal?'Mystery State Revealed':'Which State Is It?'}</strong></header><h1>${reveal?`Mystery State: ${escape(q.options[q.correctOption])} State`:'Identify the Nigerian State from the clues'}</h1><div class="display-timer" id="timer" aria-label="Seconds remaining">${remaining(s)}</div><div class="display-map-card" id="display-map-container"></div><div class="display-clues-strip">${(q.cluesSoFar||[q.clue]).map((c,i)=>{const m=(q.clueMediaSoFar||[])[i]||(i===(q.clueNumber-1)?q.media:null);return `<div class="display-clue-card"><div class="display-clue-img-wrap">${m?.src?`<img src="${escape(m.src)}" alt="${escape(m.alt||'')}" class="display-clue-img">`:''}</div><div class="display-clue-text" style="padding:6px 10px;font-size:0.85rem;line-height:1.3"><strong>Clue ${i+1}:</strong> ${escape(c)}${reveal&&m?.caption?`<small class="display-clue-caption" style="display:block;color:var(--muted);font-size:0.75rem;margin-top:2px">${escape(m.caption)}</small>`:''}</div></div>`}).join('')}</div><div class="display-options">${q.options.map((o,i)=>`<div class="display-option ${reveal&&q.correctOption===i?'correct':''}"><span class="display-option-letter">${String.fromCharCode(65+i)}</span><span>${escape(o)} State</span>${reveal&&q.correctOption===i?'<span class="display-check">✓</span>':''}</div>`).join('')}</div>${reveal?`<aside><strong>Why:</strong> ${escape(q.explanation||'')}${q.highlightState?` · Highlight: ${escape(q.highlightState)} State`:''}</aside>`:''}<footer><span class="display-state"><i class="display-state-dot"></i>${stateLabel}</span><span>Decode the State · 1,000 pts</span></footer></section>`;
+      root.innerHTML=`<section class="display-question is-decode ${reveal?'is-revealed':'is-live-question'}"><header><div class="display-brand"><span class="display-brand-mark">NG</span><span>Decode the State</span></div><strong class="display-category">${reveal?'Mystery State Revealed':'Which State Is It?'}</strong></header><h1>${reveal?`Mystery State: ${escape(q.options[q.correctOption])} State`:'Identify the Nigerian State from the clues'}</h1><div class="display-timer" id="timer" aria-label="Seconds remaining">${remaining(s)}</div><div class="display-map-card" id="display-map-container"></div><div class="display-clues-strip">${(q.cluesSoFar||[q.clue]).map((c,i)=>{const m=(q.clueMediaSoFar||[])[i]||(i===(q.clueNumber-1)?q.media:null);return `<div class="display-clue-card"><div class="display-clue-img-wrap">${m?.src?`<img src="${escape(m.src)}" alt="${escape(m.alt||'')}" class="display-clue-img">`:''}</div><div class="display-clue-text" style="padding:6px 10px;font-size:0.85rem;line-height:1.3"><strong>Clue ${i+1}:</strong> ${escape(c)}</div></div>`}).join('')}</div><div class="display-options">${q.options.map((o,i)=>`<div class="display-option ${reveal&&q.correctOption===i?'correct':''}"><span class="display-option-letter">${String.fromCharCode(65+i)}</span><span>${escape(o)} State</span>${reveal&&q.correctOption===i?'<span class="display-check">✓</span>':''}</div>`).join('')}</div>${reveal?`<aside><strong>Why:</strong> ${escape(q.explanation||'')}${q.highlightState?` · Highlight: ${escape(q.highlightState)} State`:''}</aside>`:''}<footer><span class="display-state"><i class="display-state-dot"></i>${stateLabel}</span><span>Decode the State · 1,000 pts</span></footer></section>`;
       if(window.NigeriaStatesMap){
         const mapContainer=$('#display-map-container',root);
         if(mapContainer){
@@ -179,11 +378,67 @@
       return;
     }
 
-    const mediaHTML=displayMediaHTML(q,reveal);
-    root.innerHTML=`<section class="display-question ${reveal?'is-revealed':'is-live-question'} ${mediaHTML?'has-media':''}"><header><div class="display-brand"><span class="display-brand-mark">NG</span><span>${escape(q.title||'Naija Passport Challenge')}</span></div><strong class="display-category">${escape(q.category)}</strong></header><h1>${escape(q.clue||q.question)}</h1><div class="display-timer" id="timer" aria-label="Seconds remaining">${remaining(s)}</div>${mediaHTML}<div class="display-options">${q.options.map((o,i)=>`<div class="display-option ${reveal&&q.correctOption===i?'correct':''}"><span class="display-option-letter">${String.fromCharCode(65+i)}</span><span>${escape(o)}</span>${reveal&&q.correctOption===i?'<span class="display-check">✓</span>':''}</div>`).join('')}</div>${reveal?`<aside><strong>Why:</strong> ${escape(q.explanation||'')}${q.highlightState?` · Highlight: ${escape(q.highlightState)} State`:''}</aside>`:''}<footer><span class="display-state"><i class="display-state-dot"></i>${stateLabel}</span>${q.day&&q.order?`<span>Day ${q.day} · Question ${q.order}/12</span>`:''}</footer></section>`;startClock(s)
+    // Passport Question display: Room-scale layout
+    const mediaHTML=displayMediaHTML(q);
+    const orderFooter = q.day && q.order ? `Day ${q.day} · Question ${q.order}/12` : q.order ? `Question ${q.order}` : '';
+
+    if(reveal){
+      // Dedicated TV Quiz Passport Reveal Composition
+      root.innerHTML=`<section class="display-question is-revealed is-passport-reveal ${mediaHTML?'has-photo':'no-photo'}">
+        <header class="reveal-top-header">
+          <div class="display-brand">
+            <span class="display-brand-mark">NG</span>
+            <span>${escape(q.title||'Naija Passport Challenge')}</span>
+          </div>
+          <strong class="display-category">${escape(q.category)}</strong>
+        </header>
+        <h1 class="reveal-question-heading">${escape(q.clue||q.question)}</h1>
+        <div class="passport-reveal-stage display-reveal-showcase ${mediaHTML?'has-photo':'text-only'}">
+          ${mediaHTML?`<div class="reveal-photo-column">${mediaHTML}</div>`:''}
+          <div class="reveal-answer-column">
+            <div class="display-winning-card display-winning-answer">
+              <span class="winning-label">CORRECT ANSWER</span>
+              <div class="winning-choice">
+                <span class="winning-letter display-option-letter">${String.fromCharCode(65+q.correctOption)}</span>
+                <strong class="winning-title">${escape(q.options[q.correctOption])}</strong>
+                <span class="winning-check display-check">✓</span>
+              </div>
+            </div>
+            <div class="display-explanation-card display-reveal-explanation">
+              <span class="explanation-label explanation-kicker">WHY</span>
+              <p class="explanation-body">${escape(q.explanation||'')}</p>
+            </div>
+          </div>
+        </div>
+        <footer class="reveal-bottom-footer">
+          <span class="display-state"><i class="display-state-dot"></i>${stateLabel}</span>
+          ${orderFooter?`<span>${orderFooter}</span>`:''}
+        </footer>
+      </section>`;
+    } else {
+      // Normal Voting Screen: Question + Timer + Media + Options
+      root.innerHTML=`<section class="display-question is-live-question ${mediaHTML?'has-media':''}"><header><div class="display-brand"><span class="display-brand-mark">NG</span><span>${escape(q.title||'Naija Passport Challenge')}</span></div><strong class="display-category">${escape(q.category)}</strong></header><h1>${escape(q.clue||q.question)}</h1><div class="display-timer" id="timer" aria-label="Seconds remaining">${remaining(s)}</div>${mediaHTML}<div class="display-options">${q.options.map((o,i)=>`<div class="display-option"><span class="display-option-letter">${String.fromCharCode(65+i)}</span><span>${escape(o)}</span></div>`).join('')}</div><footer><span class="display-state"><i class="display-state-dot"></i>${stateLabel}</span>${orderFooter?`<span>${orderFooter}</span>`:''}</footer></section>`;
+      startClock(s);
+    }
   }
   async function renderLeaderboard(activity){const root=$('#display-root'),key=`leaderboard|${activity}`;if(!root||key===lastDisplayKey)return;try{const d=await api().request(`/leaderboard?activity=${activity}`);lastDisplayKey=key;root.innerHTML=`<section class="display-question"><header><div class="display-brand"><span class="display-brand-mark">NG</span><span>${activity==='decode'?'Decode the State':'Naija Passport Challenge'}</span></div><strong class="display-category">Top ten</strong></header><h1>Leaderboard</h1><ol class="leaderboard">${d.leaders.map((x,i)=>`<li><span>${i+1}. ${escape(x.alias)}</span><strong>${x.totalScore.toLocaleString()}</strong></li>`).join('')}</ol><footer><span>NIAC Live</span><span>${activity==='decode'?'Separate game score':'Cumulative Day 1 + Day 2'}</span></footer></section>`}catch{renderDisplay(currentState)}}
-  function initDisplay(){const preview=localPreview();if(preview){applyState(preview.data);return}if(window.NIACTransport){window.NIACTransport.onState(applyState);window.NIACTransport.init()}loadState();setInterval(loadState,1000);screenChannel?.addEventListener('message',loadState);window.addEventListener('online',loadState);document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadState()})}
+  function initDisplay(){
+    const preview=localPreview();
+    if(preview){applyState(preview.data);return}
+    if(window.NIACTransport){
+      window.NIACTransport.onState(applyState);
+      window.NIACTransport.init();
+      screenChannel?.addEventListener('message',loadState);
+      window.addEventListener('online',()=>window.NIACTransport.refreshNow());
+      document.addEventListener('visibilitychange',()=>{if(!document.hidden)window.NIACTransport.refreshNow()});
+    } else {
+      loadState();
+      setInterval(loadState,2000);
+      screenChannel?.addEventListener('message',loadState);
+      window.addEventListener('online',loadState);
+      document.addEventListener('visibilitychange',()=>{if(!document.hidden)loadState()});
+    }
+  }
   async function adminLogin(){const email=$('#admin-email').value,password=$('#admin-password').value;try{const {data,error}=await supabase.createClient(APP_CONFIG.SUPABASE_URL,APP_CONFIG.SUPABASE_ANON_KEY).auth.signInWithPassword({email,password});if(error)throw error;api().setAdminToken(data.session.access_token);location.reload()}catch(err){message($('#admin-login-message'),err.message,true)}}
   async function initAdmin(){
     if(!api().hasAdmin()&&['127.0.0.1','localhost'].includes(location.hostname)){try{const local=await api().request('/dev/admin',{method:'POST'});api().setAdminToken(local.token)}catch{}}

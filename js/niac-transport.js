@@ -49,8 +49,10 @@
     if (newState.serverNow) {
       clockOffset = new Date(newState.serverNow).getTime() - Date.now();
     }
-    // Only dispatch if version is newer or first state
-    if (!currentState || (newState.version && newState.version >= (currentState.version || 0))) {
+    const isNewer = !currentState || (Number(newState.version || 0) > Number(currentState.version || 0));
+    const isCorrection = currentState && (Number(newState.version || 0) === Number(currentState.version || 0)) && (newState.checksum && newState.checksum !== currentState.checksum);
+
+    if (isNewer || isCorrection) {
       currentState = newState;
       listeners.state.forEach(fn => {
         try { fn(newState); } catch (e) { console.error(e); }

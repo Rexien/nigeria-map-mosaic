@@ -116,9 +116,197 @@ body { background-image: linear-gradient(rgba(0, 135, 83, .035) 1px, transparent
 .display-state-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 2px var(--forest); }
 .display-question.is-revealed .display-timer { display: none; }
 .display-question.is-revealed h1 { grid-column: 1 / -1; }
+/* ==========================================================================
+   DEDICATED PASSPORT REVEAL COMPOSITION (TV QUIZ SHOWCASE)
+   ========================================================================== */
+.display-question.is-passport-reveal {
+  min-height: 100svh;
+  max-height: 100svh;
+  height: 100svh;
+  box-sizing: border-box;
+  padding: clamp(20px, 3vh, 40px) clamp(36px, 4.5vw, 84px) clamp(16px, 2.2vh, 30px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  gap: clamp(10px, 1.6vh, 22px);
+}
 
-/* Media layout on projector */
-.display-question.has-media {
+/* TOP REGION: Compact Header + Proportional Question */
+.reveal-top-header {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  padding-bottom: clamp(8px, 1.2vh, 16px);
+  border-bottom: 3px solid var(--forest);
+}
+.reveal-question-heading {
+  flex: 0 0 auto;
+  margin: 0;
+  font-family: "Arial Black", "Aptos Display", "Segoe UI", sans-serif;
+  font-size: clamp(1.45rem, 2.1vw, 2.45rem);
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+  color: var(--forest);
+  text-wrap: balance;
+  max-width: 95%;
+}
+
+/* MAIN REVEAL REGION: Balanced Two-Column Stage */
+.passport-reveal-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: grid;
+  align-items: center;
+}
+.passport-reveal-stage.has-photo {
+  grid-template-columns: minmax(0, 54fr) minmax(0, 46fr);
+  gap: clamp(24px, 3vw, 48px);
+}
+.passport-reveal-stage.text-only {
+  grid-template-columns: 1fr;
+  max-width: 850px;
+  margin: 0 auto;
+}
+
+/* Left Column: Large Photo */
+.reveal-photo-column {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.reveal-photo-column .display-media-wrap {
+  width: 100%;
+  height: 100%;
+  max-height: clamp(280px, 53vh, 560px);
+  border: 4px solid var(--forest);
+  border-radius: 14px;
+  background: #0d1e15;
+  box-shadow: 8px 8px 0 var(--gold);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.reveal-photo-column .display-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Right Column: Correct Answer Card + Subordinate Why Card */
+.reveal-answer-column {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(14px, 2vh, 26px);
+  min-height: 0;
+  width: 100%;
+}
+
+.display-winning-card {
+  background: var(--forest);
+  border: 3.5px solid var(--gold);
+  border-radius: 14px;
+  padding: clamp(16px, 2.3vh, 28px) clamp(20px, 2.4vw, 36px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25), 8px 8px 0 var(--gold);
+  color: white;
+}
+.winning-label {
+  display: inline-block;
+  background: var(--gold);
+  color: var(--forest);
+  font-weight: 900;
+  font-size: clamp(0.78rem, 0.95vw, 1.1rem);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 5px 16px;
+  border-radius: 20px;
+  margin-bottom: clamp(8px, 1.2vh, 14px);
+}
+.winning-choice {
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 1.8vw, 24px);
+}
+.winning-letter {
+  width: clamp(48px, 4.2vw, 68px);
+  height: clamp(48px, 4.2vw, 68px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--gold);
+  color: var(--forest);
+  font-family: "Arial Black", sans-serif;
+  font-weight: 900;
+  font-size: clamp(1.45rem, 2.1vw, 2.5rem);
+  display: grid;
+  place-content: center;
+  flex: 0 0 auto;
+}
+.winning-title {
+  flex: 1;
+  min-width: 0;
+  color: #ffffff;
+  font-size: clamp(1.6rem, 2.5vw, 3.2rem);
+  font-weight: 800;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.winning-check {
+  color: var(--gold);
+  font-size: clamp(1.8rem, 2.7vw, 3.4rem);
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+
+.display-explanation-card {
+  background: var(--gold-soft);
+  border: 2px solid var(--forest);
+  border-left: 9px solid var(--forest);
+  border-radius: 8px;
+  padding: clamp(12px, 1.6vh, 20px) clamp(18px, 2vw, 30px);
+}
+.explanation-label {
+  display: block;
+  font-weight: 900;
+  font-size: clamp(0.8rem, 1vw, 1.15rem);
+  color: var(--forest);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+.explanation-body {
+  margin: 0;
+  font-size: clamp(1.02rem, 1.35vw, 1.6rem);
+  line-height: 1.35;
+  color: var(--ink);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+/* BOTTOM REGION: Footer */
+.reveal-bottom-footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: clamp(.85rem, 1.1vw, 1.3rem);
+  font-weight: 750;
+  color: var(--muted);
+  border-top: 1px solid rgba(0, 135, 83, 0.18);
+  padding-top: clamp(8px, 1vh, 14px);
+}
+
+/* Media layout on projector for normal live voting */
+.display-question.has-media:not(.is-passport-reveal):not(.is-revealed) {
   grid-template-columns: minmax(320px, .92fr) minmax(380px, 1.08fr);
   grid-template-areas:
     "header header"
@@ -217,13 +405,33 @@ body { background-image: linear-gradient(rgba(0, 135, 83, .035) 1px, transparent
   align-items: center;
   min-height: 0;
   height: 100%;
+  background: rgba(255, 254, 249, 0.96);
+  border: 2px solid var(--forest);
+  border-radius: 10px;
+  box-shadow: 3px 3px 0 var(--gold);
+  padding: clamp(6px, 1.2vh, 12px);
+  overflow: hidden;
+  box-sizing: border-box;
 }
 .display-map-card .nigeria-map-wrapper {
   margin: 0;
   width: 100%;
+  height: 100%;
   max-width: 100%;
-  max-height: clamp(260px, 52vh, 480px);
-  padding: 4px;
+  max-height: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.display-map-card .nigeria-states-svg {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow: visible;
 }
 .display-clues-strip {
   grid-area: clues;

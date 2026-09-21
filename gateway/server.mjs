@@ -133,7 +133,9 @@ export function createGatewayServer(customQueue = null, options = {}) {
     const requestId = req.headers['x-request-id'] || crypto.randomUUID();
 
     const origin=req.headers.origin;
-    const cors=allowedOrigin&&(allowedOrigin==='*'||origin===allowedOrigin)?{'access-control-allow-origin':allowedOrigin==='*'?'*':origin,'vary':'Origin'}:{};
+    const allowedOrigins = allowedOrigin ? allowedOrigin.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const isOriginAllowed = allowedOrigin === '*' || (origin && allowedOrigins.includes(origin));
+    const cors=isOriginAllowed?{'access-control-allow-origin':allowedOrigin==='*'?'*':origin,'vary':'Origin'}:{};
     const sendJson = (status, body) => {
       res.writeHead(status, {
         'content-type': 'application/json; charset=utf-8',

@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
     "test": "node --test",
-    "serve": "npx netlify dev",
+    "test:browser": "node scripts/run-browser-matrix.mjs",
+    "test:all": "node --test && node scripts/run-browser-matrix.mjs",
+    "build": "node scripts/build-static.mjs",
+    "serve": "npx vercel dev",
     "content:import": "node scripts/import-content.mjs",
     "load": "k6 run load/answer-spike.js",
     "rehearsal:baseline": "node scripts/rehearsal-baseline.mjs",

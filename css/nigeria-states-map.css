@@ -1,0 +1,166 @@
+/* css/nigeria-states-map.css */
+/* Reusable Nigeria States SVG Map Component Primitives */
+/* Shared across Mobile Participant (play.html) and Stage Projector (display.html) */
+
+.nigeria-map-wrapper {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.nigeria-states-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* Base polygon styling for Nigeria states + FCT */
+.state-polygon {
+  fill: #dbe8df;
+  stroke: #6f8578;
+  stroke-width: 1.2px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: fill .25s ease, stroke .25s ease, stroke-width .25s ease, filter .25s ease;
+}
+
+.state-polygon.is-fct {
+  stroke-dasharray: 2, 2;
+}
+
+/* Neutral non-candidate states: clearly visible but subdued on light/neutral backgrounds */
+.state-polygon.is-neutral {
+  fill: #dbe8df;
+  stroke: #6f8578;
+  stroke-width: 1.2px;
+  opacity: 0.95;
+}
+
+/* Candidate states (A, B, C, D) - stand out distinctly with stronger green fill and bold gold border */
+.state-polygon.is-candidate {
+  fill: #6fa98a;
+  stroke: #e9ad16;
+  stroke-width: 3px;
+  opacity: 1;
+}
+
+/* Interactive phone hover / focus styles (only when interactive) */
+.is-interactive .state-polygon.is-candidate {
+  cursor: pointer;
+}
+
+.is-interactive .state-polygon.is-candidate:hover,
+.is-interactive .state-polygon.is-candidate:focus {
+  fill: #5a9677;
+  stroke: #ffffff;
+  stroke-width: 3.5px;
+  filter: drop-shadow(0 0 8px rgba(233, 173, 22, 0.85));
+  outline: none;
+}
+
+/* Selected state (player choice on phone) */
+.state-polygon.is-selected {
+  fill: #d4af37 !important;
+  stroke: #ffffff !important;
+  stroke-width: 3.5px !important;
+  filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.9)) !important;
+}
+
+/* Reveal: winning state becomes vibrant Nigeria emerald green with prominent white border */
+.state-polygon.is-correct {
+  fill: #10b981 !important;
+  stroke: #ffffff !important;
+  stroke-width: 4px !important;
+  filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.6)) !important;
+  animation: state-pulse 1.8s infinite alternate ease-in-out;
+}
+
+/* Reveal: incorrect selected state (phone) */
+.state-polygon.is-wrong {
+  fill: #b42318 !important;
+  stroke: #fca5a5 !important;
+  stroke-width: 2.5px !important;
+  opacity: 0.9;
+}
+
+@keyframes state-pulse {
+  0% {
+    filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.5));
+  }
+  100% {
+    filter: drop-shadow(0 0 16px rgba(52, 211, 153, 0.95));
+  }
+}
+
+/* Candidate Badges (A, B, C, D) - high contrast, readable from across the room */
+.state-badge .badge-circle {
+  fill: #e9ad16;
+  stroke: #063f2a;
+  stroke-width: 2.5px;
+  transition: all .2s ease;
+}
+
+.state-badge .badge-text {
+  fill: #063f2a;
+  font-size: 15px;
+  font-weight: 900;
+  font-family: "Arial Black", "Aptos", -apple-system, BlinkMacSystemFont, sans-serif;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Badge states */
+.state-badge.badge-selected .badge-circle {
+  fill: #ffffff;
+  stroke: #063f2a;
+  stroke-width: 3px;
+}
+
+.state-badge.badge-selected .badge-text {
+  fill: #063f2a;
+}
+
+.state-badge.badge-correct .badge-circle {
+  fill: #10b981;
+  stroke: #ffffff;
+  stroke-width: 3px;
+}
+
+.state-badge.badge-correct .badge-text {
+  fill: #ffffff;
+  font-size: 16px;
+}
+
+.state-badge.badge-wrong .badge-circle {
+  fill: #b42318;
+  stroke: #fca5a5;
+  stroke-width: 2.5px;
+}
+
+.state-badge.badge-wrong .badge-text {
+  fill: #ffffff;
+}
+
+/* Map hover tooltip (for interactive mobile map) */
+.map-tooltip {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(6, 63, 42, 0.95);
+  border: 1px solid #e9ad16;
+  color: #fffdf3;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .2s ease;
+  white-space: nowrap;
+}
+
+.map-tooltip.visible {
+  opacity: 1;
+}

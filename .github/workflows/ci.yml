@@ -1,0 +1,33 @@
+name: NIAC Live CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'antigravity/**'
+      - 'codex/**'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Node Test Suite & Browser Matrix
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run Node.js Tests
+        run: npm test
+
+      - name: Run Browser Viewport Matrix Tests
+        run: npm run test:browser
+        env:
+          CHROME_BIN: /usr/bin/google-chrome

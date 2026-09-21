@@ -75,6 +75,10 @@
   to = "/activities.html"
   status = 200
 [[redirects]]
+  from = "/credits"
+  to = "/credits.html"
+  status = 200
+[[redirects]]
   from = "/lens"
   to = "/lens.html"
   status = 200
