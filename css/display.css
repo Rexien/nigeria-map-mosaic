@@ -257,11 +257,18 @@ footer.display-footer {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
   font-size: clamp(0.85rem, 1vw, 1.1rem);
   color: var(--text-muted);
 }
 
+.footer-instructions > span:first-child {
+  flex: 0 0 auto;
+}
+
 .submit-url-badge {
+  min-width: 0;
+  max-width: min(68vw, 72ch);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
   padding: 4px 14px;
@@ -270,6 +277,8 @@ footer.display-footer {
   font-weight: 700;
   color: #FFFFFF;
   letter-spacing: 0.04em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .live-pulse-container {
@@ -281,6 +290,20 @@ footer.display-footer {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   font-weight: 600;
+}
+
+/* Embedded Lens delegates projector connectivity to the parent /display shell. */
+html.is-embedded .live-pulse-container {
+  display: none;
+}
+
+html.is-embedded footer.display-footer {
+  justify-content: flex-start;
+  padding-right: clamp(112px, 11vw, 168px);
+}
+
+html.is-embedded .footer-instructions {
+  max-width: 100%;
 }
 
 /* Re-pack Notice Banner (Subtle indicator) */

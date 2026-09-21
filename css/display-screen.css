@@ -111,7 +111,8 @@ body { background-image: linear-gradient(rgba(0, 135, 83, .035) 1px, transparent
 .display-option.correct .display-option-letter { border-color: var(--gold); background: var(--gold); color: var(--forest); }
 .display-check { margin-left: auto; color: var(--gold); font-size: 1.15em; }
 .display-question aside { grid-area: explanation; min-width: 0; padding: clamp(9px, 1.15vh, 15px) clamp(16px, 1.5vw, 26px); border: 2px solid var(--forest); border-left-width: 10px; background: var(--gold-soft); font-size: clamp(.98rem, 1.25vw, 1.55rem); line-height: 1.25; overflow-wrap: anywhere; }
-.display-question footer { grid-area: footer; min-width: 0; display: flex; justify-content: space-between; align-items: center; font-size: clamp(.9rem, 1.15vw, 1.4rem); font-weight: 750; color: var(--muted); }
+.display-question footer { grid-area: footer; min-width: 0; display: flex; justify-content: space-between; align-items: center; gap: 18px; padding-right: clamp(112px, 11vw, 168px); font-size: clamp(.9rem, 1.15vw, 1.4rem); font-weight: 750; color: var(--muted); }
+.display-question footer > * { min-width: 0; overflow-wrap: anywhere; }
 .display-state { display: flex; align-items: center; gap: 9px; color: var(--forest); }
 .display-state-dot { width: 11px; height: 11px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 2px var(--forest); }
 .display-question.is-revealed .display-timer { display: none; }

@@ -30,6 +30,7 @@ const routes = {
   '/play': 'play.html',
   '/passport': 'passport.html',
   '/display': 'display.html',
+  '/lens/live': 'lens-live.html',
   '/admin': 'admin.html'
 };
 
@@ -187,6 +188,7 @@ const matrix = [
   { name: 'Phone Compact', width: 360, height: 640, isMobile: true },
   { name: 'Phone Standard', width: 390, height: 844, isMobile: true },
   // Projectors
+  { name: 'Projector XGA', width: 1024, height: 768, isMobile: false },
   { name: 'Projector 720p', width: 1280, height: 720, isMobile: false },
   { name: 'Projector WXGA', width: 1366, height: 768, isMobile: false },
   { name: 'Projector 1080p', width: 1920, height: 1080, isMobile: false }
@@ -371,6 +373,116 @@ for (const vp of matrix) {
     if (!dedupOk) allPassed = false;
 
   } else {
+    // Projector composition audit: every display state must respect the fixed
+    // parent status safe-area and the decorative edge bands.
+    const projectorStates = [
+      ['Welcome', 'welcome'],
+      ['Lens', 'lens'],
+      ['Passport Standby', 'passport-standby'],
+      ['Passport Question Open', 'passport-text'],
+      ['Passport Reveal', 'passport-reveal'],
+      ['Leaderboard', 'leaderboard'],
+      ['Decode Preparing / Clue 1', 'decode-clue1'],
+      ['Decode Clue 2', 'decode-clue2'],
+      ['Decode Clue 3', 'decode-clue3'],
+      ['Decode Voting', 'decode-voting'],
+      ['Decode Reveal', 'decode-reveal']
+    ];
+
+    for (const [label, preview] of projectorStates) {
+      await navigate(`http://127.0.0.1:${SERVER_PORT}/display?preview=${preview}`);
+      if (preview === 'lens') {
+        // The first cold Lens load parses the local D3/cloud bundles before the
+        // final controller runs; wait for the ownership state, not merely HTML.
+        for (let attempt = 0; attempt < 75; attempt++) {
+          const embedReady = await evaluate(`() => {
+            const doc = document.querySelector('#lens-projector-frame')?.contentDocument;
+            const live = doc?.querySelector('.live-pulse-container');
+            return Boolean(doc?.documentElement?.classList.contains('is-embedded') && live && getComputedStyle(live).display === 'none');
+          }`);
+          if (embedReady) break;
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+      const composition = await evaluate(`() => {
+        const visible = el => {
+          if (!el) return false;
+          const style = getComputedStyle(el);
+          const rect = el.getBoundingClientRect();
+          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+        };
+        const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+        const status = document.querySelector('.screen-status');
+        const statusRect = status?.getBoundingClientRect();
+        const protectedContent = Array.from(document.querySelectorAll('.display-question footer > *, .join-box, .standby-content, .display-option, .display-winning-card, .display-explanation-card, .display-map-card, .display-clue-card, .display-timer')).filter(visible);
+        const collisions = statusRect ? protectedContent.filter(el => overlaps(statusRect, el.getBoundingClientRect())).map(el => el.className || el.tagName) : [];
+        const edgeHeight = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--edge-height')) || 0;
+        const footers = Array.from(document.querySelectorAll('.display-question footer')).filter(visible);
+        const footerBehindBand = footers.some(el => el.getBoundingClientRect().bottom > innerHeight - edgeHeight + 1);
+        const textNodes = Array.from(document.querySelectorAll('.display-question h1, .display-option, .display-question footer, .join-url, .standby-content')).filter(visible);
+        const clippedText = textNodes.filter(el => {
+          const style = getComputedStyle(el);
+          const clipsOverflow = ['hidden', 'clip', 'auto', 'scroll'].includes(style.overflowX) || ['hidden', 'clip', 'auto', 'scroll'].includes(style.overflowY);
+          return clipsOverflow && (el.scrollWidth > el.clientWidth + 2 || el.scrollHeight > el.clientHeight + 2);
+        }).map(el => el.className || el.tagName);
+        return {
+          hasHorizontalScroll: document.documentElement.scrollWidth > innerWidth + 2,
+          hasVerticalScroll: document.documentElement.scrollHeight > innerHeight + 2,
+          statusInsideViewport: Boolean(statusRect && statusRect.left >= 0 && statusRect.right <= innerWidth + 1 && statusRect.top >= 0 && statusRect.bottom <= innerHeight - edgeHeight + 1),
+          collisions,
+          footerBehindBand,
+          clippedText
+        };
+      }`);
+      const compositionOk = !composition.hasHorizontalScroll && !composition.hasVerticalScroll && composition.statusInsideViewport && composition.collisions.length === 0 && !composition.footerBehindBand && composition.clippedText.length === 0;
+      results.push({
+        viewport: `${vp.name} (${vp.width}×${vp.height})`,
+        test: `${label} Composition (Projector)`,
+        pass: compositionOk,
+        details: `H-scroll: ${composition.hasHorizontalScroll}, V-scroll: ${composition.hasVerticalScroll}, status safe: ${composition.statusInsideViewport}, collisions: ${composition.collisions.length}, clipped text: ${composition.clippedText.length}, footer behind band: ${composition.footerBehindBand}`
+      });
+      if (!compositionOk) allPassed = false;
+
+      if (preview === 'lens') {
+        const lensMetrics = await evaluate(`() => {
+          const frame = document.querySelector('#lens-projector-frame');
+          const doc = frame?.contentDocument;
+          const status = document.querySelector('.screen-status');
+          const childLive = doc?.querySelector('.live-pulse-container');
+          const badge = doc?.querySelector('.event-badge');
+          const url = doc?.querySelector('#submit-url-badge');
+          if (url) url.textContent = 'niaclive-git-feature-admin-pin-auth-zamijudes-projects.vercel.app';
+          const statusRect = status?.getBoundingClientRect();
+          const frameRect = frame?.getBoundingClientRect();
+          const urlRect = url?.getBoundingClientRect();
+          const translatedUrlRect = urlRect && frameRect ? {
+            left: frameRect.left + urlRect.left,
+            right: frameRect.left + urlRect.right,
+            top: frameRect.top + urlRect.top,
+            bottom: frameRect.top + urlRect.bottom
+          } : null;
+          const overlaps = (a, b) => a && b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+          return {
+            iframeReady: Boolean(doc && url),
+            childLiveHidden: childLive ? getComputedStyle(childLive).display === 'none' : false,
+            childBadgeHasLiveText: /live|realtime/i.test(badge?.textContent || ''),
+            childHorizontalScroll: doc ? doc.documentElement.scrollWidth > doc.documentElement.clientWidth + 2 : true,
+            urlInsideChild: Boolean(urlRect && urlRect.left >= 0 && urlRect.right <= doc.documentElement.clientWidth + 1 && urlRect.bottom <= doc.documentElement.clientHeight + 1),
+            urlClipped: Boolean(url && (url.scrollWidth > url.clientWidth + 2 || url.scrollHeight > url.clientHeight + 2)),
+            urlOverlapsParentStatus: overlaps(translatedUrlRect, statusRect)
+          };
+        }`);
+        const lensOk = lensMetrics.iframeReady && lensMetrics.childLiveHidden && !lensMetrics.childBadgeHasLiveText && !lensMetrics.childHorizontalScroll && lensMetrics.urlInsideChild && !lensMetrics.urlClipped && !lensMetrics.urlOverlapsParentStatus;
+        results.push({
+          viewport: `${vp.name} (${vp.width}×${vp.height})`,
+          test: 'Embedded Lens Chrome Ownership (Projector)',
+          pass: lensOk,
+          details: `iframe ready: ${lensMetrics.iframeReady}, child live hidden: ${lensMetrics.childLiveHidden}, duplicate live text: ${lensMetrics.childBadgeHasLiveText}, H-scroll: ${lensMetrics.childHorizontalScroll}, long URL inside: ${lensMetrics.urlInsideChild}, clipped: ${lensMetrics.urlClipped}, status overlap: ${lensMetrics.urlOverlapsParentStatus}`
+        });
+        if (!lensOk) allPassed = false;
+      }
+    }
+
     // Projector Test: Passport Reveal room-scale layout (must fit within 100vh)
     await navigate(`http://127.0.0.1:${SERVER_PORT}/display?preview=passport-reveal`);
     const displayMetrics = await evaluate(`() => {

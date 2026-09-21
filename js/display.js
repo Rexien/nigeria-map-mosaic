@@ -33,11 +33,13 @@
   const loadingOverlay = document.getElementById('loading-overlay');
   const submitUrlBadge = document.getElementById('submit-url-badge');
   const questionTitleEl = document.getElementById('display-question');
+  const isEmbedded = new URLSearchParams(window.location.search).get('embed') === '1';
 
   /**
    * Initializes the display page
    */
   async function init() {
+    applyProjectorOwnership();
     applyConfig();
     updateSubmitUrlHint();
     await loadGeoJSON();
@@ -76,6 +78,17 @@
   }
 
   /**
+   * The parent /display surface owns projector connection state. Embedded Lens
+   * therefore removes standalone realtime chrome while keeping it on /lens/live.
+   */
+  function applyProjectorOwnership() {
+    if (!isEmbedded) return;
+    document.documentElement.classList.add('is-embedded');
+    const badgeLabel = document.querySelector('.event-badge span:last-child');
+    if (badgeLabel) badgeLabel.textContent = 'Responses';
+  }
+
+  /**
    * Applies config values to DOM
    */
   function applyConfig() {
@@ -91,12 +104,12 @@
   function updateSubmitUrlHint() {
     if (!submitUrlBadge) return;
     try {
-      const url = new URL(window.location.href);
-      const baseUrl = url.origin + url.pathname.replace('display.html', '');
-      const cleanUrl = baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      const configuredUrl = window.APP_CONFIG?.PUBLIC_EVENT_URL;
+      const joinUrl = configuredUrl ? new URL(configuredUrl, window.location.origin) : new URL(window.location.origin);
+      const cleanUrl = `${joinUrl.host}${joinUrl.pathname}`.replace(/\/$/, '');
       submitUrlBadge.textContent = cleanUrl;
     } catch (e) {
-      submitUrlBadge.textContent = 'Event Submit Page';
+      submitUrlBadge.textContent = window.location.host || 'Event Submit Page';
     }
   }
 

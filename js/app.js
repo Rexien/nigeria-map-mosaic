@@ -50,6 +50,7 @@
     const qMediaPassport={...basePassport,id:'preview-passport-q3',order:3,category:'Crafts',question:'Which traditional resist-dyed textile heritage is shown in this photograph?',options:['Adire','Aso-oke','Akwa-ocha','Kente'],correctOption:0,explanation:'Adire is the traditional Yoruba resist-dyed indigo textile produced in Abeokuta and across the South West.',media:{src:'/assets/trivia/01.jpg',alt:'Dark fabric with pale circular and geometric patterns.',timing:'question'}};
 
     if(mode==='welcome')return{data:{activity:'passport',screenMode:'welcome',state:'lobby',question:null,responseCount:0,serverNow:new Date().toISOString()},answerIndex:null};
+    if(mode==='lens')return{data:{activity:'lens',screenMode:'activity',state:'lobby',question:null,responseCount:0,serverNow:new Date().toISOString()},answerIndex:null};
     if(mode==='leaderboard')return{data:{activity:'passport',screenMode:'activity',state:'leaderboard',question:basePassport,responseCount:0,serverNow:new Date().toISOString()},answerIndex:0};
     if(mode==='passport-standby'||mode==='decode-standby')return{data:{activity:mode==='decode-standby'?'decode':'passport',screenMode:'activity',state:'lobby',question:null,responseCount:0,serverNow:new Date().toISOString()},answerIndex:null};
 
