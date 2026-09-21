@@ -55,7 +55,7 @@ async function dbAll(path) {
 async function computeAndPersistSnapshots(sessionId, version) {
   const session = (await db(`live_sessions?id=eq.${sessionId}&select=event_id`))[0];
   if (!session) throw new Error('Snapshot session not found');
-  const participants = await dbAll(`participants?event_id=eq.${session.event_id}&select=id,alias,registered_at,is_spectator`);
+  const participants = await dbAll(`participants?event_id=eq.${session.event_id}&select=id,alias,registered_at,is_spectator,is_rehearsal`);
   const raw = await dbAll(`gateway_answers?session_id=eq.${sessionId}&select=participant_id,question_id,option_index,clue_number,response_ms`);
   const legacy = await dbAll(`participant_answers?session_id=eq.${sessionId}&select=participant_id,question_id,option_index,clue_number,response_ms,is_correct,points`);
   const questionRows = await dbAll('quiz_questions?select=id,correct_option,is_void,category,quiz_rounds(day,quiz_games(activity))');
@@ -351,6 +351,7 @@ async function join(e) {
   const recovery = code();
   const settings = (await db(`event_settings?event_id=eq.${ev.id}&select=*`))[0];
   const isSpectator = Boolean(settings?.roster_frozen);
+  const isRehearsal = body.rehearsal === true || settings?.rehearsal_mode === true;
   const row = (await db('participants', {
     method: 'POST',
     body: JSON.stringify({
@@ -358,11 +359,12 @@ async function join(e) {
       alias,
       token_hash: hash(rawToken),
       recovery_code_hash: hash(recovery),
-      is_spectator: isSpectator
+      is_spectator: isSpectator,
+      is_rehearsal: isRehearsal
     })
   }))[0];
-  const credential = signParticipantCredential({ participantId: row.id, eventId: ev.id, isSpectator });
-  return json(200, { participant: { id: row.id, alias, isSpectator }, token: rawToken, recoveryCode: recovery, credential });
+  const credential = signParticipantCredential({ participantId: row.id, eventId: ev.id, isSpectator, isRehearsal });
+  return json(200, { participant: { id: row.id, alias, isSpectator, isRehearsal }, token: rawToken, recoveryCode: recovery, credential });
 }
 
 async function recover(e) {
@@ -381,8 +383,9 @@ async function recover(e) {
     body: JSON.stringify({ token_hash: hash(rawToken), last_seen_at: new Date().toISOString() })
   });
   const isSpectator = Boolean(rows[0].is_spectator);
-  const credential = signParticipantCredential({ participantId: rows[0].id, eventId: rows[0].event_id, isSpectator });
-  return json(200, { participant: { id: rows[0].id, alias: rows[0].alias, isSpectator }, token: rawToken, credential });
+  const isRehearsal = Boolean(rows[0].is_rehearsal);
+  const credential = signParticipantCredential({ participantId: rows[0].id, eventId: rows[0].event_id, isSpectator, isRehearsal });
+  return json(200, { participant: { id: rows[0].id, alias: rows[0].alias, isSpectator, isRehearsal }, token: rawToken, credential });
 }
 
 async function buildLiveState(skipAuto = false) {
@@ -794,11 +797,21 @@ async function adminAction(e, admin) {
     }
     let clearedCount = 0;
     if (b.scope === 'rehearsal') {
-      const rehearsalParticipants = await db(`participants?event_id=eq.${ev.id}&is_rehearsal=eq.true&select=id`);
+      if (b.confirmText !== 'CLEAR REHEARSAL DATA') return json(422, { error: 'Confirmation did not match rehearsal scope.' });
+      if (session && ['open', 'locked'].includes(session.state)) return json(409, { error: 'Finish revealing the current question before clearing rehearsal data.' });
+      const rehearsalParticipants = await dbAll(`participants?event_id=eq.${ev.id}&is_rehearsal=eq.true&select=id`);
       clearedCount = rehearsalParticipants?.length || 0;
-      if (clearedCount > 0) {
-        await db(`participants?event_id=eq.${ev.id}&is_rehearsal=eq.true`, { method: 'DELETE' });
+      for (let start = 0; start < clearedCount; start += 100) {
+        const ids = rehearsalParticipants.slice(start, start + 100).map(p => encodeURIComponent(p.id)).join(',');
+        // These two legacy foreign keys intentionally have no ON DELETE CASCADE.
+        // Delete only dependents of the enumerated rehearsal identities.
+        for (const table of ['participant_answers', 'lens_submissions']) {
+          await db(`${table}?participant_id=in.(${ids})`, { method: 'DELETE' });
+        }
+        await db(`participants?event_id=eq.${ev.id}&is_rehearsal=eq.true&id=in.(${ids})`, { method: 'DELETE' });
       }
+      publicReads.clear();
+      rankingReads.clear();
     } else if (b.scope === 'production' && b.confirmText === 'RESET NIAC 2026 PRODUCTION DATA') {
       const allParticipants = await db(`participants?event_id=eq.${ev.id}&select=id`);
       clearedCount = allParticipants?.length || 0;
