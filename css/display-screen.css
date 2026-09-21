@@ -186,21 +186,25 @@ body { background-image: linear-gradient(rgba(0, 135, 83, .035) 1px, transparent
   width: 100%;
   height: 100%;
   max-height: clamp(280px, 53vh, 560px);
-  border: 4px solid var(--forest);
+  border: 2px solid rgba(13, 30, 21, 0.2);
   border-radius: 14px;
-  background: #0d1e15;
-  box-shadow: 8px 8px 0 var(--gold);
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(13, 30, 21, 0.12), 0 2px 8px rgba(13, 30, 21, 0.06);
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
+  padding: clamp(8px, 1.2vh, 14px);
+  box-sizing: border-box;
 }
 .reveal-photo-column .display-photo {
-  width: 100%;
-  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
   display: block;
+  border-radius: 8px;
+  filter: drop-shadow(0 4px 14px rgba(13, 30, 21, 0.12));
 }
 
 /* Right Column: Correct Answer Card + Subordinate Why Card */
@@ -338,16 +342,21 @@ body { background-image: linear-gradient(rgba(0, 135, 83, .035) 1px, transparent
   display: flex;
   justify-content: center;
   align-items: center;
-  border: 3px solid var(--forest);
-  background: rgba(255, 254, 249, .96);
-  box-shadow: clamp(8px, 1vw, 14px) clamp(8px, 1vw, 14px) 0 var(--gold);
+  border: 2px solid rgba(13, 30, 21, 0.2);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(13, 30, 21, 0.12), 0 2px 8px rgba(13, 30, 21, 0.06);
   overflow: hidden;
+  padding: clamp(6px, 1vh, 10px);
+  box-sizing: border-box;
 }
 .display-photo {
   max-width: 100%;
   max-height: clamp(230px, 44vh, 480px);
   object-fit: contain;
   display: block;
+  border-radius: 8px;
+  filter: drop-shadow(0 4px 12px rgba(13, 30, 21, 0.08));
 }
 .display-media-caption {
   margin-top: clamp(8px, 1.1vh, 14px);
@@ -406,10 +415,10 @@ body { background-image: linear-gradient(rgba(0, 135, 83, .035) 1px, transparent
   align-items: center;
   min-height: 0;
   height: 100%;
-  background: rgba(255, 254, 249, 0.96);
-  border: 2px solid var(--forest);
-  border-radius: 10px;
-  box-shadow: 3px 3px 0 var(--gold);
+  background: #ffffff;
+  border: 1.5px solid rgba(13, 30, 21, 0.16);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(13, 30, 21, 0.08);
   padding: clamp(6px, 1.2vh, 12px);
   overflow: hidden;
   box-sizing: border-box;
@@ -443,25 +452,26 @@ body { background-image: linear-gradient(rgba(0, 135, 83, .035) 1px, transparent
   min-height: 0;
 }
 .display-clue-card {
-  border: 2px solid var(--forest);
-  background: rgba(255, 254, 249, 0.96);
-  border-radius: 8px;
+  border: 1.5px solid rgba(13, 30, 21, 0.16);
+  background: #ffffff;
+  border-radius: 10px;
   overflow: hidden;
   display: grid;
   grid-template-columns: clamp(90px, 8vw, 120px) 1fr;
   align-items: center;
-  box-shadow: 3px 3px 0 var(--gold);
+  box-shadow: 0 3px 10px rgba(13, 30, 21, 0.06);
   min-height: 0;
+  transition: all 0.2s ease;
 }
 .display-clue-card.is-active {
-  border-color: var(--gold);
-  box-shadow: 0 0 12px rgba(212, 175, 55, 0.6);
+  border-color: var(--flag);
+  box-shadow: 0 0 0 2px var(--flag), 0 6px 18px rgba(0, 135, 83, 0.2);
 }
 .display-clue-img-wrap {
   width: 100%;
   height: 100%;
   min-height: clamp(65px, 9vh, 95px);
-  background: #0d1e15;
+  background: #ffffff;
   overflow: hidden;
 }
 .display-clue-img {
