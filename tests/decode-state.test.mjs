@@ -199,3 +199,45 @@ test('decode scoring awards 1,000 points and calculates separate decode leaderbo
   assert.equal(decodeLeaders[1].alias, 'Emeka', 'Slower correct answer ranks #2');
   assert.equal(decodeLeaders[2].alias, 'Babajide', 'Wrong answer ranks #3');
 });
+
+test('nigeria states map css architecture: shared stylesheet loaded on display.html and play.html, app.css not loaded on display', async () => {
+  const [mapCss, displayHtml, playHtml, appCss] = await Promise.all([
+    readFile(join(root, 'css', 'nigeria-states-map.css'), 'utf8'),
+    readFile(join(root, 'display.html'), 'utf8'),
+    readFile(join(root, 'play.html'), 'utf8'),
+    readFile(join(root, 'css', 'app.css'), 'utf8')
+  ]);
+
+  // Shared map stylesheet must define component primitives
+  assert.ok(mapCss.includes('.state-polygon.is-neutral'), 'Must define neutral states');
+  assert.ok(mapCss.includes('.state-polygon.is-candidate'), 'Must define candidate states');
+  assert.ok(mapCss.includes('.state-polygon.is-correct'), 'Must define correct state reveal');
+  assert.ok(mapCss.includes('.state-badge'), 'Must define state badges');
+  assert.ok(mapCss.includes('.badge-circle'), 'Must define badge circles');
+  assert.ok(mapCss.includes('.badge-text'), 'Must define badge letters');
+
+  // Neutral states must use light cream-green fill (#dbe8df) and legible stroke (#6f8578)
+  assert.ok(mapCss.includes('#dbe8df'), 'Neutral fill must be light green (#dbe8df)');
+  assert.ok(mapCss.includes('#6f8578'), 'Neutral stroke must be visible (#6f8578)');
+
+  // Candidate states must use stronger green fill (#6fa98a) and gold stroke (#e9ad16)
+  assert.ok(mapCss.includes('#6fa98a'), 'Candidate fill must be prominent green (#6fa98a)');
+  assert.ok(mapCss.includes('#e9ad16'), 'Candidate stroke must be gold (#e9ad16)');
+
+  // Badges must use gold circle (#e9ad16) and dark text (#063f2a)
+  assert.ok(mapCss.includes('#063f2a'), 'Badge text/stroke must be dark forest green');
+
+  // display.html must link nigeria-states-map.css, but MUST NOT link app.css
+  assert.ok(displayHtml.includes('/css/nigeria-states-map.css'), 'display.html must link /css/nigeria-states-map.css');
+  assert.ok(!displayHtml.includes('/css/app.css'), 'display.html MUST NOT load /css/app.css to avoid contaminating layout');
+
+  // play.html must link both nigeria-states-map.css and app.css
+  assert.ok(playHtml.includes('/css/nigeria-states-map.css'), 'play.html must link /css/nigeria-states-map.css');
+  assert.ok(playHtml.includes('/css/app.css'), 'play.html must link /css/app.css');
+
+  // app.css must have had duplicated component primitives removed
+  assert.ok(!appCss.includes('.state-polygon.is-neutral'), 'app.css must not duplicate .state-polygon.is-neutral');
+  assert.ok(!appCss.includes('.state-polygon.is-candidate{'), 'app.css must not duplicate .state-polygon.is-candidate');
+  assert.ok(!appCss.includes('.state-badge .badge-circle'), 'app.css must not duplicate badge circle styles');
+});
+

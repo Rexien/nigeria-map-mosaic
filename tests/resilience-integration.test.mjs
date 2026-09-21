@@ -49,14 +49,14 @@ test('gateway refreshes checksummed authority state and exposes live capacity he
 
 test('production resilience wiring keeps secrets private and shared networks unblocked',async()=>{
   const [api,gateway,queue,migration,compose,caddy]=await Promise.all([
-    readFile(new URL('../netlify/functions/api.mjs',import.meta.url),'utf8'),
+    readFile(new URL('../server/api.mjs',import.meta.url),'utf8'),
     readFile(new URL('../gateway/server.mjs',import.meta.url),'utf8'),
     readFile(new URL('../gateway/lib/sqlite-queue.mjs',import.meta.url),'utf8'),
     readFile(new URL('../supabase/migrations/202609140001_snapshot_scoring.sql',import.meta.url),'utf8'),
     readFile(new URL('../gateway/docker-compose.yml',import.meta.url),'utf8'),
     readFile(new URL('../gateway/Caddyfile',import.meta.url),'utf8')
   ]);
-  assert.match(api,/rateLimit\(p\.id,'answer'/);assert.match(api,/rpc\/submit_raw_quiz_answer/);assert.match(api,/gatewaySse: gatewayBase/);
+  assert.match(api,/rateLimit\(p\.id,\s*'answer'/);assert.match(api,/rpc\/submit_raw_quiz_answer/);assert.match(api,/gatewaySse: gatewayBase/);
   assert.doesNotMatch(api,/currentRequestId\s*=/);assert.doesNotMatch(gateway,/production'\?'[^']+'/);
   assert.match(queue,/synchronous = FULL/);assert.match(compose,/GATEWAY_PORT=3000/);assert.match(caddy,/reverse_proxy gateway:3000/);
   assert.match(migration,/create table if not exists public\.gateway_answers/i);

@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { db, event } from '../netlify/functions/_db.mjs';
+import { db, event } from '../server/db.mjs';
 
 const questions=JSON.parse(await readFile(new URL('../content/questions.json',import.meta.url),'utf8'));
 const decode=JSON.parse(await readFile(new URL('../content/decode-rounds.json',import.meta.url),'utf8'));

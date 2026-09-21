@@ -9,7 +9,7 @@ export const triviaAssets = {
     license: 'CC BY-SA 4.0',
     licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
     source: commons('Hibiscus Sabdariffa calyxes.jpg'),
-    alt: 'A fresh, deep-red hibiscus calyx on the plant.',
+    alt: 'Deep-red botanical calyx growing on a plant.',
     caption: 'The fleshy calyces are harvested and dried to make zobo. This photograph shows a fresh calyx.',
     timing: 'reveal'
   },
@@ -20,8 +20,8 @@ export const triviaAssets = {
     license: 'CC BY-SA 4.0',
     licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
     source: commons('Suya in skewers.jpg'),
-    alt: 'Seasoned meat skewers arranged on a grill rack.',
-    caption: 'Suya is seasoned meat cooked over a grill.',
+    alt: 'Seasoned meat skewers prepared over open heat embers.',
+    caption: 'Thinly sliced seasoned meat skewers prepared over open embers.',
     timing: 'reveal'
   },
   adire: {

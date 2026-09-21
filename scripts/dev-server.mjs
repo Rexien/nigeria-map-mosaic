@@ -14,7 +14,25 @@ const storePath=join(root,'.local-data','niac.json');
 const questionFile=JSON.parse(await readFile(join(root,'content','questions.json'),'utf8'));
 const decodeFile=JSON.parse(await readFile(join(root,'content','decode-rounds.json'),'utf8'));
 const passport=questionFile.questions.map((q,i)=>({...q,id:`passport-${q.day}-${q.order}`,activity:'passport',title:'Naija Passport Challenge',durationSeconds:q.durationSeconds||20}));
-const decode=decodeFile.rounds.map((r,i)=>({id:`decode-${i+1}`,day:i<3?1:2,order:i+1,category:r.zone,question:'Which Nigerian state do these clues describe?',options:r.options,correctOption:r.correctOption,explanation:r.revealFact,activity:'decode',title:'Decode the State',durationSeconds:30,clues:r.clues,clueMedia:r.clueMedia,highlightState:r.geoId}));
+const decode=decodeFile.rounds.map((r,i)=>({
+  id:`decode-${i+1}`,
+  day:i<3?1:2,
+  order:i+1,
+  category:r.zone,
+  question:'Which Nigerian state do these clues describe?',
+  options:r.options,
+  correctOption:r.correctOption,
+  explanation:r.revealFact,
+  activity:'decode',
+  title:'Decode the State',
+  durationSeconds:r.durationSeconds||30,
+  clues:r.clues,
+  clueMedia:r.clueMedia,
+  highlightState:r.geoId,
+  source:r.source,
+  reviewStatus:r.reviewStatus??r.review_status??'requires_fact_check',
+  isVoid:Boolean(r.isVoid??r.is_void??false)
+}));
 const questions=[...passport,...decode];
 const fresh=()=>({settings:{active_activity:'lens',screen_mode:'welcome',rehearsal_mode:true,rosterFrozen:false,capacityMode:'auto',maxActivePlayers:1500},participants:[],lens:[],answers:[],audit:[],questionOverrides:{},session:{id:'local-session',state:'lobby',currentQuestionId:null,currentClue:1,openedAt:null,deadlineAt:null,responseCount:0,version:1},leaderboardSnapshots:{},participantSnapshots:{}});
 let data;try{data=JSON.parse(await readFile(storePath,'utf8'))}catch{data=fresh()}
@@ -70,7 +88,7 @@ function triggerSnapshotScoring(){
 }
 
 async function autoReveal(){if(data.session.state==='open'&&data.session.deadlineAt&&Date.now()>=new Date(data.session.deadlineAt).getTime()){data.session.state='revealed';data.session.version++;triggerSnapshotScoring();data.audit.push({at:new Date().toISOString(),action:'auto_reveal'});console.log(formatLog('info','reveal_job',{sessionId:data.session.id,questionId:data.session.currentQuestionId,version:data.session.version}));await persist();broadcastState();}}
-const routes={'/':'index.html','/activities':'activities.html','/lens':'lens.html','/lens/live':'lens-live.html','/play':'play.html','/passport':'passport.html','/display':'display.html','/admin':'admin.html','/admin/content':'admin-content.html'};
+const routes={'/':'index.html','/activities':'activities.html','/credits':'credits.html','/lens':'lens.html','/lens/live':'lens-live.html','/play':'play.html','/passport':'passport.html','/display':'display.html','/admin':'admin.html','/admin/content':'admin-content.html'};
 const mime={'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'};
 const send=(res,status,body,type='application/json; charset=utf-8',headers={})=>{res.writeHead(status,{'content-type':type,'cache-control':'no-store',...headers});res.end(type.startsWith('application/json')?JSON.stringify(body):body)};
 const body=async req=>{let value='';for await(const chunk of req){value+=chunk;if(value.length>100000)throw new Error('Body too large')}return value?JSON.parse(value):{}};

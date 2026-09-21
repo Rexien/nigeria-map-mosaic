@@ -20,7 +20,7 @@ test('every question renders correctly in every preview state',()=>{
     assert.ok(!html.includes('undefined'));
     if(state==='open'){assert.ok(!html.includes('Why:</strong>'));assert.ok(!html.includes('class="notice result-notice'));}
     if(state==='lobby')assert.ok(!html.includes(q.question));
-    if(['correct','wrong','timeout'].includes(state))assert.match(html,view==='phone'?/Correct|correct answer/:/display-option correct/);
+    if(['correct','wrong','timeout'].includes(state))assert.match(html,view==='phone'?/Correct|correct answer/:/display-winning-card|display-option correct/);
   }
 });
 test('wrong answers and timeouts get zero points; selection locks without revealing',()=>{
