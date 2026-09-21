@@ -5,6 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import healthHandler from '../api/health.js';
 import catchAllHandler from '../api/[...path].js';
+import deadlineHandler from '../api/internal/deadline.js';
+import approvedLensHandler from '../api/lens/approved.js';
+import adminHandler from '../api/admin/[...path].js';
 import { handler as authorityHandler, handleNodeRequest } from '../server/api.mjs';
 import { buildStatic } from '../scripts/build-static.mjs';
 import { createGatewayServer } from '../gateway/server.mjs';
@@ -86,6 +89,39 @@ test('Vercel catch-all api/[...path].js routes through handleNodeRequest', async
   const body = JSON.parse(res.body);
   assert.equal(body.status, 'ok');
   assert.equal(body.service, 'niac-live-authority');
+});
+
+test('Nested Vercel functions route through handleNodeRequest', async () => {
+  // 1. deadlineHandler requires gateway secret
+  const deadlineReq = {
+    method: 'POST',
+    url: '/api/internal/deadline',
+    headers: { host: 'niac-live.vercel.app' },
+    body: {}
+  };
+  const deadlineRes = createMockRes();
+  await deadlineHandler(deadlineReq, deadlineRes);
+  assert.equal(deadlineRes.statusCode, 401);
+
+  // 2. approvedLensHandler routes properly
+  const lensReq = {
+    method: 'GET',
+    url: '/api/lens/approved',
+    headers: { host: 'niac-live.vercel.app' }
+  };
+  const lensRes = createMockRes();
+  await approvedLensHandler(lensReq, lensRes);
+  assert.ok([200, 503].includes(lensRes.statusCode), 'Should route to authority handler');
+
+  // 3. adminHandler routes properly
+  const adminReq = {
+    method: 'GET',
+    url: '/api/admin/status',
+    headers: { host: 'niac-live.vercel.app' }
+  };
+  const adminRes = createMockRes();
+  await adminHandler(adminReq, adminRes);
+  assert.equal(adminRes.statusCode, 401);
 });
 
 test('Static build isolates public frontend assets into dist/ and strictly omits private files', async () => {
