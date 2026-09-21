@@ -139,7 +139,16 @@
       $('#admin-pin')?.focus();
       return;
     }
-    $('#control-room').classList.remove('hidden');try{await refreshStatus()}catch(err){api().clearAdmin();$('#control-room').classList.add('hidden');$('#admin-login').classList.remove('hidden');show($('#admin-login-message'),errorText(err),true);return}
+    $('#control-room').classList.remove('hidden');try{await refreshStatus()}catch(err){
+      api().clearAdmin();
+      $('#control-room').classList.add('hidden');
+      $('#admin-login').classList.remove('hidden');
+      $('#admin-login-button').onclick=signIn;
+      $('#admin-pin')?.addEventListener('keydown',event=>{if(event.key==='Enter')signIn()},{once:false});
+      $('#admin-pin')?.focus();
+      show($('#admin-login-message'),errorText(err),true);
+      return;
+    }
     $$('[name="active-activity"]').forEach(input=>{input.onclick=()=>{$$('[name="active-activity"]').forEach(i=>{i.checked=(i===input)});changeActivity(input.value)}});
     $('#question-select').onchange=()=>{$('#open-question').disabled=!$('#question-select').value||adminStatus?.session?.state==='open'||adminStatus?.session?.state==='ended'};
     $('#open-question').onclick=event=>{const qSelect=$('#question-select').value;const currentId=adminStatus?.session?.current_question_id||adminStatus?.session?.currentQuestionId;const questionId=qSelect||currentId;if(!questionId)return show($('#admin-message'),'Choose a question first.',true);const act=adminStatus?.settings?.active_activity||'passport';const state=adminStatus?.session?.state||'lobby';if(act==='decode'&&state==='lobby'){perform({kind:'select_question',questionId},'Clue 1 is now showing on the big screen and phones.',event.currentTarget)}else if(act==='decode'&&state==='preparing'){perform({kind:'open_question',questionId},'Voting is now open! 30-second countdown started.',event.currentTarget)}else{perform({kind:'open_question',questionId},'Question opened on the projector and phones.',event.currentTarget)}};
