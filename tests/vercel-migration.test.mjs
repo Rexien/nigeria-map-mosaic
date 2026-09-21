@@ -5,9 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import healthHandler from '../api/health.js';
 import catchAllHandler from '../api/[...path].js';
-import deadlineHandler from '../api/internal/deadline.js';
-import approvedLensHandler from '../api/lens/approved.js';
-import adminHandler from '../api/admin/[...path].js';
+import indexHandler from '../api/index.js';
 import { handler as authorityHandler, handleNodeRequest } from '../server/api.mjs';
 import { buildStatic } from '../scripts/build-static.mjs';
 import { createGatewayServer } from '../gateway/server.mjs';
@@ -91,8 +89,7 @@ test('Vercel catch-all api/[...path].js routes through handleNodeRequest', async
   assert.equal(body.service, 'niac-live-authority');
 });
 
-test('Nested Vercel functions route through handleNodeRequest', async () => {
-  // 1. deadlineHandler requires gateway secret
+test('Vercel api/index.js routes all /api/* requests through handleNodeRequest', async () => {
   const deadlineReq = {
     method: 'POST',
     url: '/api/internal/deadline',
@@ -100,28 +97,8 @@ test('Nested Vercel functions route through handleNodeRequest', async () => {
     body: {}
   };
   const deadlineRes = createMockRes();
-  await deadlineHandler(deadlineReq, deadlineRes);
+  await indexHandler(deadlineReq, deadlineRes);
   assert.equal(deadlineRes.statusCode, 401);
-
-  // 2. approvedLensHandler routes properly
-  const lensReq = {
-    method: 'GET',
-    url: '/api/lens/approved',
-    headers: { host: 'niac-live.vercel.app' }
-  };
-  const lensRes = createMockRes();
-  await approvedLensHandler(lensReq, lensRes);
-  assert.ok([200, 503].includes(lensRes.statusCode), 'Should route to authority handler');
-
-  // 3. adminHandler routes properly
-  const adminReq = {
-    method: 'GET',
-    url: '/api/admin/status',
-    headers: { host: 'niac-live.vercel.app' }
-  };
-  const adminRes = createMockRes();
-  await adminHandler(adminReq, adminRes);
-  assert.equal(adminRes.statusCode, 401);
 });
 
 test('Static build isolates public frontend assets into dist/ and strictly omits private files', async () => {
@@ -195,13 +172,14 @@ test('vercel.json configuration satisfies architecture rules', async () => {
   assert.equal(vercelConfig.buildCommand, 'node scripts/build-static.mjs');
   assert.equal(vercelConfig.cleanUrls, true);
 
-  // Rewrites: minimal, only where URL differs from filename
+  // Rewrites: universal /api/(.*) -> /api catch-all
   assert.ok(Array.isArray(vercelConfig.rewrites));
   const rewrites = vercelConfig.rewrites;
 
-  // Must NOT contain redundant /api/(.*) rewrite
   const apiRewrite = rewrites.find(r => r.source && r.source.startsWith('/api'));
-  assert.equal(apiRewrite, undefined, 'vercel.json must NOT contain redundant /api rewrites');
+  assert.ok(apiRewrite, 'vercel.json must contain universal /api rewrite');
+  assert.equal(apiRewrite.source, '/api/(.*)');
+  assert.equal(apiRewrite.destination, '/api');
 
   // Must contain mapping for differing paths
   const lensLive = rewrites.find(r => r.source === '/lens/live');
