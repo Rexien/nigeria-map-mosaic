@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { createAdminSession, hashAdminPin, verifyAdminPin, verifyAdminSession } from '../server/admin-auth.mjs';
 import { handler as authorityHandler } from '../server/api.mjs';
 
@@ -83,4 +84,10 @@ test('POST /api/admin/login rejects an incorrect PIN without exposing details', 
     assert.equal(result.statusCode, 401);
     assert.deepEqual(JSON.parse(result.body), { error: 'Invalid control code.' });
   });
+});
+
+test('admin status reads answer options from question_options, not a nonexistent quiz_questions.options column', () => {
+  const source = fs.readFileSync(new URL('../server/api.mjs', import.meta.url), 'utf8');
+  assert.match(source, /question_options\(option_index,label\)/);
+  assert.doesNotMatch(source, /quiz_questions\?select=[^'\n]*\boptions\b/);
 });
