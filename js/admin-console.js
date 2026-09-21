@@ -38,7 +38,23 @@
     if(!api().hasAdmin()&&localHost()){try{const result=await api().request('/dev/admin',{method:'POST'});api().setAdminToken(result.token)}catch{}}
     return api().hasAdmin();
   }
-  async function signIn(){const email=$('#admin-email').value,password=$('#admin-password').value;try{$('#admin-login-button').disabled=true;show($('#admin-login-message'),'');const {data,error}=await supabase.createClient(APP_CONFIG.SUPABASE_URL,APP_CONFIG.SUPABASE_ANON_KEY).auth.signInWithPassword({email,password});if(error)throw error;if(!data?.session?.access_token)throw new Error('Supabase did not return an admin session.');api().setAdminToken(data.session.access_token);location.reload()}catch(err){show($('#admin-login-message'),errorText(err),true)}finally{$('#admin-login-button').disabled=false}}
+  async function signIn(){
+    const pin=$('#admin-pin')?.value.trim()||'';
+    if(!/^\d{8}$/.test(pin))return show($('#admin-login-message'),'Enter the 8-digit control code.',true);
+    try{
+      $('#admin-login-button').disabled=true;
+      show($('#admin-login-message'),'');
+      const result=await api().request('/admin/login',{method:'POST',body:{pin}});
+      if(!result?.token)throw new Error('Admin session was not created.');
+      api().setAdminToken(result.token);
+      location.reload();
+    }catch(err){
+      show($('#admin-login-message'),errorText(err),true);
+      $('#admin-pin')?.select();
+    }finally{
+      $('#admin-login-button').disabled=false;
+    }
+  }
 
   let adminStatus;
   function applyAdminStatus(status){
@@ -116,8 +132,14 @@
   async function clearData(scope,required){const confirmText=prompt(`Type ${required} exactly to continue.`);if(confirmText!==required)return;try{const result=await api().request('/admin/action',{method:'POST',admin:true,body:{kind:'clear_data',scope,confirmText}});await refreshStatus();show($('#admin-message'),`${result.cleared} participant profiles cleared.`)}catch(err){show($('#admin-message'),err.message,true)}}
 
   async function initAdmin(){
-    if(!await ensureAdmin()){$('#admin-login').classList.remove('hidden');$('#admin-login-button').onclick=signIn;return}
-    $('#control-room').classList.remove('hidden');try{await refreshStatus()}catch(err){api().clearAdmin();$('#control-room').classList.add('hidden');$('#admin-login').classList.remove('hidden');show($('#admin-login-message'),err.message,true);return}
+    if(!await ensureAdmin()){
+      $('#admin-login').classList.remove('hidden');
+      $('#admin-login-button').onclick=signIn;
+      $('#admin-pin')?.addEventListener('keydown',event=>{if(event.key==='Enter')signIn()});
+      $('#admin-pin')?.focus();
+      return;
+    }
+    $('#control-room').classList.remove('hidden');try{await refreshStatus()}catch(err){api().clearAdmin();$('#control-room').classList.add('hidden');$('#admin-login').classList.remove('hidden');show($('#admin-login-message'),errorText(err),true);return}
     $$('[name="active-activity"]').forEach(input=>{input.onclick=()=>{$$('[name="active-activity"]').forEach(i=>{i.checked=(i===input)});changeActivity(input.value)}});
     $('#question-select').onchange=()=>{$('#open-question').disabled=!$('#question-select').value||adminStatus?.session?.state==='open'||adminStatus?.session?.state==='ended'};
     $('#open-question').onclick=event=>{const qSelect=$('#question-select').value;const currentId=adminStatus?.session?.current_question_id||adminStatus?.session?.currentQuestionId;const questionId=qSelect||currentId;if(!questionId)return show($('#admin-message'),'Choose a question first.',true);const act=adminStatus?.settings?.active_activity||'passport';const state=adminStatus?.session?.state||'lobby';if(act==='decode'&&state==='lobby'){perform({kind:'select_question',questionId},'Clue 1 is now showing on the big screen and phones.',event.currentTarget)}else if(act==='decode'&&state==='preparing'){perform({kind:'open_question',questionId},'Voting is now open! 30-second countdown started.',event.currentTarget)}else{perform({kind:'open_question',questionId},'Question opened on the projector and phones.',event.currentTarget)}};
