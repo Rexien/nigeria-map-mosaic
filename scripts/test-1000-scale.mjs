@@ -8,12 +8,12 @@ import { signParticipantCredential } from '../lib/credentials.mjs';
 import { createStateEnvelope } from '../lib/state-envelope.mjs';
 import { generateSnapshots } from '../lib/snapshot-scoring.mjs';
 
-const PARTICIPANTS = 1000;
-const DUPLICATE_USERS = 100;
-const ANSWER_WINDOW_MS = 1500; // 1.5 second burst window (667 answers/sec sustained)
+const PARTICIPANTS = Number(process.argv[2] || process.env.PARTICIPANTS || 1000);
+const ANSWER_WINDOW_MS = Number(process.argv[3] || process.env.ANSWER_WINDOW_MS || 2000);
+const DUPLICATE_USERS = Math.min(100, Math.floor(PARTICIPANTS * 0.1));
 
 console.log(`\n===============================================================`);
-console.log(`  NIAC Live: 1,000-Participant Live Capacity & Scalability Test`);
+console.log(`  NIAC Live: ${PARTICIPANTS}-Participant Live Capacity & Scalability Test`);
 console.log(`===============================================================\n`);
 
 const eventId = 'niac-2026';
@@ -98,7 +98,7 @@ try {
     participants.push({ id: pId, alias, token, idempotencyKey: crypto.randomUUID() });
   }
   const provisionDuration = performance.now() - tProvision0;
-  console.log(`  ✓ 1,000 credentials signed in ${provisionDuration.toFixed(1)}ms (${(PARTICIPANTS / (provisionDuration / 1000)).toFixed(0)} creds/sec)`);
+  console.log(`  ✓ ${PARTICIPANTS} credentials signed in ${provisionDuration.toFixed(1)}ms (${(PARTICIPANTS / (provisionDuration / 1000)).toFixed(0)} creds/sec)`);
 
   // Step 2: Open Question Broadcast
   console.log(`\n[Phase 2] Admin opens live question (${ANSWER_WINDOW_MS}ms answer window)...`);
@@ -123,8 +123,8 @@ try {
   broadcastState(openState);
   console.log(`  ✓ State envelope broadcasted: question is OPEN`);
 
-  // Step 3: Concurrent Answer Influx (1,000 participants answering)
-  console.log(`\n[Phase 3] Ingesting 1,000 concurrent answers + ${DUPLICATE_USERS} double-click retries...`);
+  // Step 3: Concurrent Answer Influx
+  console.log(`\n[Phase 3] Ingesting ${PARTICIPANTS} concurrent answers + ${DUPLICATE_USERS} double-click retries...`);
   const memBefore = process.memoryUsage().rss;
   const tIngest0 = performance.now();
 
@@ -176,7 +176,7 @@ try {
     (r) => r.statusCode === 200 && r.data?.duplicate
   ).length;
 
-  console.log(`  ✓ 1,000 answers ingested in ${(ingestDuration / 1000).toFixed(2)}s`);
+  console.log(`  ✓ ${PARTICIPANTS} answers ingested in ${(ingestDuration / 1000).toFixed(2)}s`);
   console.log(`    - Accepted (HTTP 200): ${accepted} / ${PARTICIPANTS} (100.0%)`);
   console.log(`    - Failed / Rejected:    ${failed}`);
   console.log(`    - Idempotent Duplicates Correctly Filtered: ${duplicatesRecognized} / ${DUPLICATE_USERS}`);
@@ -218,8 +218,8 @@ try {
   console.log(`    - Top 10 Leaders Computed: ${snapshots.leaderboards.passport.leaders.length}`);
   console.log(`    - Score Snapshots Generated: ${snapshots.participantScoreSnapshots.length}`);
 
-  // Step 6: Post-Reveal Read Storm (1,000 contestants querying score)
-  console.log(`\n[Phase 6] Simulating post-reveal score lookup storm (1,000 concurrent reads)...`);
+  // Step 6: Post-Reveal Read Storm
+  console.log(`\n[Phase 6] Simulating post-reveal score lookup storm (${PARTICIPANTS} concurrent reads)...`);
   const tReads0 = performance.now();
   let resolvedReads = 0;
   for (const p of participants) {
@@ -232,7 +232,7 @@ try {
   console.log(`  ✓ ${resolvedReads} / ${PARTICIPANTS} score lookups resolved in ${readStormDuration.toFixed(2)}ms (${(readStormDuration / PARTICIPANTS).toFixed(3)}ms/read, $O(1)$ in-memory)`);
 
   console.log(`\n===============================================================`);
-  console.log(`  FINAL VERDICT: 1,000-PARTICIPANT CAPACITY TEST PASSED CLEANLY`);
+  console.log(`  FINAL VERDICT: ${PARTICIPANTS}-PARTICIPANT CAPACITY TEST PASSED CLEANLY`);
   console.log(`===============================================================\n`);
 } finally {
   agent.destroy();
