@@ -7,7 +7,7 @@
 <body data-page="admin-console"><div class="shell-bar"></div>
 <header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true"></span><span>NIAC Live<small>Event control</small></span></a><div class="header-links"><a href="/" target="_blank">Participant page</a><a class="button compact" href="/display" target="_blank">Open big screen</a></div></header>
 <main class="page admin-page">
-  <section id="admin-login" class="panel narrow hidden"><p class="eyebrow">Event team only</p><h1>Sign in to run NIAC Live</h1><p class="muted">Use the event-team account you were given.</p><div class="field"><label for="admin-email">Email</label><input id="admin-email" type="email" autocomplete="username"></div><div class="field"><label for="admin-password">Password</label><input id="admin-password" type="password" autocomplete="current-password"></div><p id="admin-login-message" class="error" aria-live="polite"></p><button class="button" id="admin-login-button">Sign in</button></section>
+  <section id="admin-login" class="panel narrow hidden"><p class="eyebrow">Event team only</p><h1>Unlock event control</h1><p class="muted">Enter the 8-digit control code shared with the event team.</p><div class="field"><label for="admin-pin">Control code</label><input id="admin-pin" type="password" inputmode="numeric" pattern="[0-9]{8}" minlength="8" maxlength="8" autocomplete="one-time-code" placeholder="8 digits"></div><p id="admin-login-message" class="error" aria-live="polite"></p><button class="button" id="admin-login-button">Unlock control room</button></section>
   <section id="control-room" class="hidden">
     <div class="admin-page-heading"><div><p class="eyebrow">Backstage control</p><h1>Run the room</h1><p>Listen for the MC’s cue. One click sends the question to the projector and every phone.</p></div><div class="live-summary"><span>Right now</span><strong id="live-state">Loading…</strong></div></div>
     <div class="admin-grid">
@@ -71,5 +71,5 @@
     </div>
   </section>
 </main>
-<script src="/config.js"></script><script src="/lib/supabase.min.js"></script><script src="/js/niac-api.js?v=20260921-1428"></script><script src="/js/admin-console.js?v=20260921-1423"></script>
+<script src="/config.js"></script><script src="/js/niac-api.js?v=20260921-pin1"></script><script src="/js/admin-console.js?v=20260921-pin1"></script>
 </body></html>
