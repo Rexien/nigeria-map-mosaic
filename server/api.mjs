@@ -110,7 +110,7 @@ async function gatewayCall(path, envelope) {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(envelope),
-    signal: AbortSignal.timeout(4000)
+    signal: AbortSignal.timeout(path === 'lock-and-drain' ? 12000 : 4000)
   });
   if (!response.ok) throw Object.assign(new Error(`Live gateway ${path} failed (${response.status})`), { status: 503 });
   return response.json();
