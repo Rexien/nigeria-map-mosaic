@@ -210,6 +210,7 @@ test('live client activity triggers debounced reconciliation while empty idle ga
     assert.ok(stateCalls > afterImmediate, 'connected clients should keep a slow reconciliation watchdog active');
     sseClients.clear();
     sync.observe(getCachedState());
+    await sleep(50);
     const afterDisconnect = stateCalls;
     await sleep(100);
     assert.equal(stateCalls, afterDisconnect, 'idle gateway without clients should stop continuous reconciliation');
