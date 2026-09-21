@@ -3,6 +3,7 @@
 import crypto from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { db, event, verifyAdmin } from './db.mjs';
+import { createAdminSession, verifyAdminPin } from './admin-auth.mjs';
 import { formatLog, getCapacityConfig } from '../lib/telemetry.mjs';
 import { computeStateChecksum, createStateEnvelope } from '../lib/state-envelope.mjs';
 import { signParticipantCredential } from '../lib/credentials.mjs';
@@ -305,6 +306,22 @@ async function internalDeadline(e) {
 
 function bearer(e) {
   return String(e.headers?.authorization || e.headers?.Authorization || '').replace(/^Bearer\s+/i, '');
+}
+
+async function adminLogin(e) {
+  rateLimit(clientIp(e), 'admin-login', 5, 10 * 60 * 1000);
+  const body = JSON.parse(e.body || '{}');
+  const pin = String(body.pin || '').trim();
+
+  if (!/^\d{8}$/.test(pin) || !verifyAdminPin(pin)) {
+    return json(401, { error: 'Invalid control code.' });
+  }
+
+  return json(200, {
+    token: createAdminSession(),
+    expiresInSeconds: 8 * 60 * 60,
+    admin: { displayName: 'Event Team', role: 'operator' }
+  });
 }
 
 async function participant(e) {
@@ -789,6 +806,8 @@ export async function handler(e) {
         res = await approvedLens();
       } else if (method === 'GET' && route === 'leaderboard') {
         res = await leaderboard(e);
+      } else if (method === 'POST' && route === 'admin/login') {
+        res = await adminLogin(e);
       } else if (method === 'POST' && route === 'internal/deadline') {
         res = await internalDeadline(e);
       } else if (route.startsWith('admin/')) {
