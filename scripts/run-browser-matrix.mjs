@@ -52,7 +52,8 @@ await new Promise(resolve => server.listen(SERVER_PORT, '127.0.0.1', resolve));
 console.log(`Local test server listening on http://127.0.0.1:${SERVER_PORT}`);
 
 // Launch Headless Chrome (Cross-platform discovery for Windows and Linux/CI)
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 function findChrome() {
   if (process.env.CHROME_PATH && existsSync(process.env.CHROME_PATH)) return process.env.CHROME_PATH;
@@ -73,9 +74,14 @@ function findChrome() {
 }
 
 const chromePath = findChrome();
+// Chrome 136+ ignores remote-debugging flags against its default profile.
+// A disposable non-default profile keeps CDP available in CI without touching user data.
+const chromeUserDataDir = mkdtempSync(join(tmpdir(), 'niac-browser-matrix-'));
 const chromeProc = spawn(chromePath, [
   '--headless=new',
   `--remote-debugging-port=${CDP_PORT}`,
+  '--remote-debugging-address=127.0.0.1',
+  `--user-data-dir=${chromeUserDataDir}`,
   '--no-first-run',
   '--no-default-browser-check',
   '--disable-gpu',
@@ -99,6 +105,7 @@ for (let i = 0; i < 20; i++) {
 if (!cdpAvailable) {
   chromeProc.kill();
   server.close();
+  rmSync(chromeUserDataDir, { recursive: true, force: true });
   throw new Error('Chrome CDP port did not become ready');
 }
 
@@ -492,6 +499,7 @@ for (const vp of matrix) {
 ws.close();
 chromeProc.kill();
 server.close();
+rmSync(chromeUserDataDir, { recursive: true, force: true });
 
 console.log('\n--- VIEWPORT MATRIX RESULTS ---');
 for (const r of results) {
