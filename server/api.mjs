@@ -109,7 +109,8 @@ async function gatewayCall(path, envelope) {
       Authorization: `Bearer ${process.env.GATEWAY_ADMIN_SECRET || ''}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(envelope)
+    body: JSON.stringify(envelope),
+    signal: AbortSignal.timeout(4000)
   });
   if (!response.ok) throw Object.assign(new Error(`Live gateway ${path} failed (${response.status})`), { status: 503 });
   return response.json();
@@ -147,7 +148,19 @@ async function pushGatewayState() {
   if (!gatewayBase()) return;
   publicReads.clear();
   const response = await buildLiveState(true);
-  await gatewayCall('broadcast', JSON.parse(response.body));
+  const envelope = JSON.parse(response.body);
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await gatewayCall('broadcast', envelope);
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) {
+        await new Promise(resolve => setTimeout(resolve, 200 * (2 ** attempt)));
+      }
+    }
+  }
+  throw lastError;
 }
 
 async function finalizeReveal(session) {
