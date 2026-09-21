@@ -1,5 +1,6 @@
 // Provider-neutral Supabase database connection and admin verification
 import { createReadCache } from './traffic.mjs';
+import { verifyAdminSession } from './admin-auth.mjs';
 
 const eventReads = createReadCache();
 const base = () => process.env.SUPABASE_URL;
@@ -34,17 +35,5 @@ async function loadEvent() {
 export function event() { return eventReads.get('event', 30000, loadEvent); }
 
 export async function verifyAdmin(authHeader) {
-  const token = String(authHeader || '').replace(/^Bearer\s+/i, '');
-  if (!token) throw Object.assign(new Error('Admin sign-in required'), { status: 401 });
-  const response = await fetch(`${base()}/auth/v1/user`, {
-    headers: {
-      apikey: process.env.SUPABASE_ANON_KEY || key(),
-      Authorization: `Bearer ${token}`
-    }
-  });
-  if (!response.ok) throw Object.assign(new Error('Admin session expired'), { status: 401 });
-  const user = await response.json();
-  const allowed = await db(`admin_users?user_id=eq.${encodeURIComponent(user.id)}&select=*`);
-  if (!allowed[0]) throw Object.assign(new Error('This account is not an event administrator'), { status: 403 });
-  return { ...user, admin: allowed[0] };
+  return verifyAdminSession(authHeader);
 }
