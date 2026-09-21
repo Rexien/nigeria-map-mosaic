@@ -143,7 +143,8 @@ export function startAuthoritySync(options={}){
 
   const scheduleReconcile=(envelope=cachedEnvelope)=>{
     clearReconcile();
-    if(stopped||!ACTIVE_RECONCILE_STATES.has(envelope?.state))return;
+    const hasLiveClients=sseClients.size+wsClients.size>0;
+    if(stopped||(!ACTIVE_RECONCILE_STATES.has(envelope?.state)&&!hasLiveClients))return;
     reconcileTimer=setTimeout(()=>{reconcileTimer=null;void reconcileNow()},reconcileMs);
     reconcileTimer.unref?.();
   };
@@ -201,9 +202,19 @@ export function startAuthoritySync(options={}){
     }
   };
 
+  let lastClientReconcileAt=0;
   const controller={
     observe,
     reconcileNow,
+    clientActivity(){
+      if(stopped)return;
+      scheduleReconcile(cachedEnvelope);
+      const now=Date.now();
+      const minGapMs=Math.max(1000,Number(options.clientReconcileMinGapMs??10000));
+      if(now-lastClientReconcileAt<minGapMs)return;
+      lastClientReconcileAt=now;
+      void reconcileNow();
+    },
     stop(){
       stopped=true;
       clearDeadline();
@@ -302,12 +313,14 @@ export function createGatewayServer(customQueue = null, options = {}) {
       res.write(`id: ${cachedEnvelope.version}\nevent: state\ndata: ${JSON.stringify(cachedEnvelope)}\n\n`);
       sseClients.add(res);
       globalMetrics.setActiveConnections(sseClients.size + wsClients.size);
+      authoritySyncObserver?.clientActivity?.();
       const heartbeat=setInterval(()=>{try{res.write(': keepalive\n\n')}catch{clearInterval(heartbeat)}},15000);
       heartbeat.unref?.();
       req.on('close', () => {
         clearInterval(heartbeat);
         sseClients.delete(res);
         globalMetrics.setActiveConnections(sseClients.size + wsClients.size);
+        authoritySyncObserver?.observe(cachedEnvelope);
       });
       return;
     }
