@@ -549,12 +549,18 @@ async function lens(e) {
   const p = await participant(e);
   rateLimit(p.id, 'lens', 10, 60000);
   const body = JSON.parse(e.body || '{}');
-  const text = clean(body.response);
+  const text = clean(body.response || body.phrase || '');
   if (text.length < 2 || text.length > 72) return json(422, { error: 'Your lens response must be between 2 and 72 characters.' });
   const ev = await event();
   await db('lens_submissions', {
     method: 'POST',
-    body: JSON.stringify({ event_id: ev.id, participant_id: p.id, raw_response: text, moderated_response: text, status: 'approved' })
+    body: JSON.stringify({
+      event_id: ev.id,
+      participant_id: p.id,
+      phrase: text,
+      normalized_phrase: text.toLowerCase(),
+      status: 'approved'
+    })
   });
   publicReads.clear();
   return json(200, { submitted: true, message: 'Thank you. Your response has been added to Nigeria Through Your Lens.' });
@@ -562,11 +568,20 @@ async function lens(e) {
 
 async function approvedLens() {
   const ev = await event();
-  const items = await publicReads.get('lens', 1000, async () => {
-    const rows = await db(`lens_submissions?event_id=eq.${ev.id}&status=eq.approved&select=id,moderated_response,created_at&order=created_at.desc&limit=120`);
-    return rows.map(r => ({ id: r.id, response: r.moderated_response, createdAt: r.created_at }));
+  const responses = await publicReads.get('lens', 1000, async () => {
+    const rows = await db(`lens_submissions?event_id=eq.${ev.id}&status=eq.approved&select=id,phrase,normalized_phrase,created_at&order=created_at.desc&limit=120`);
+    return (rows || []).map(r => ({ id: r.id, phrase: r.phrase, normalized_phrase: r.normalized_phrase, created_at: r.created_at }));
   });
-  return json(200, { items });
+  return json(200, {
+    responses,
+    items: responses.map(r => ({ id: r.id, response: r.phrase, createdAt: r.created_at }))
+  });
+}
+
+async function adminLens(e, admin) {
+  const ev = await event();
+  const rows = await db(`lens_submissions?event_id=eq.${ev.id}&select=id,phrase,created_at,status,participants(alias)&order=created_at.desc&limit=200`);
+  return json(200, { responses: rows || [] });
 }
 
 async function leaderboard(e) {
@@ -592,7 +607,14 @@ async function adminData(e, admin) {
     session,
     settings,
     gateway,
-    metrics: { participants: participantCount, responseCount: responseRow?.response_count || 0 },
+    capacity: gateway,
+    metrics: {
+      participants: participantCount,
+      responseCount: responseRow?.response_count || 0,
+      activeCount: participantCount,
+      spectatorCount: 0,
+      rosterFrozen: Boolean(settings?.roster_frozen)
+    },
     questions: questions.map(q => ({
       id: q.id,
       activity: q.quiz_rounds?.quiz_games?.activity || 'passport',
@@ -633,27 +655,26 @@ async function updateQuestion(e, admin) {
   if (!statuses.includes(reviewStatus)) return json(422, { error: 'Choose a valid review status.' });
 
   const before = (await db(`quiz_questions?id=eq.${id}&select=*,question_options(*)`))[0];
-  if (!before) return json(404, { error: 'Question not found.' });
-
-  const live = (await db(`live_sessions?event_id=eq.${ev.id}&current_question_id=eq.${id}&select=state&limit=1`))[0];
-  if (live && ['open', 'locked', 'revealed', 'leaderboard'].includes(live.state)) {
-    return json(409, { error: 'This question is being shown now. Move to another question before editing it.' });
+  if (!before) return json(404, { error: 'Question not found' });
+  const liveSession = (await db(`live_sessions?event_id=eq.${ev.id}&select=current_question_id,state&order=updated_at.desc&limit=1`))[0];
+  if (liveSession?.current_question_id === id && ['open', 'locked'].includes(liveSession.state)) {
+    return json(409, { error: 'This question is being shown now. Close or reveal it before editing.' });
   }
 
   const patch = {
     question,
-    explanation,
-    source,
     correct_option: correctOption,
     duration_seconds: durationSeconds,
+    explanation,
+    source,
     review_status: reviewStatus,
+    media: b.media || null,
+    image_fallback: b.fallback || null,
     updated_at: new Date().toISOString()
   };
-  if (b.media !== undefined) patch.media = b.media;
-  if (b.fallback !== undefined) patch.image_fallback = b.fallback;
 
   const after = (await db(`quiz_questions?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify(patch) }))[0];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < options.length; i += 1) {
     await db(`question_options?question_id=eq.${id}&option_index=eq.${i}`, { method: 'PATCH', body: JSON.stringify({ label: options[i] }) });
   }
   await audit(admin, ev, 'update_question', 'quiz_question', id, before, after);
@@ -665,16 +686,146 @@ async function adminAction(e, admin) {
   const b = JSON.parse(e.body || '{}');
   const ev = await event();
   let session = (await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`))[0];
+
+  if (b.kind === 'show_welcome') {
+    if (session?.state === 'open') {
+      return json(409, { error: 'Wait for the current question to close before showing Welcome.' });
+    }
+    const now = new Date().toISOString();
+    await db(`event_settings?event_id=eq.${ev.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ screen_mode: 'welcome', updated_at: now })
+    });
+    let afterSession = session;
+    if (session) {
+      afterSession = (await db(`live_sessions?id=eq.${session.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          state: 'lobby',
+          current_question_id: null,
+          current_round_id: null,
+          current_clue: 1,
+          opened_at: null,
+          deadline_at: null,
+          updated_at: now,
+          version: session.version + 1
+        })
+      }))[0];
+    }
+    await audit(admin, ev, 'show_welcome', 'live_session', session?.id || ev.id, session, afterSession);
+    return json(200, { session: afterSession });
+  }
+
   if (b.kind === 'set_settings') {
+    const currentSettings = (await db(`event_settings?event_id=eq.${ev.id}&select=*`))[0];
+    const isChangingActivity = Boolean(b.activeActivity && b.activeActivity !== currentSettings?.active_activity);
+
+    if (session?.state === 'open' && isChangingActivity) {
+      return json(409, { error: 'Wait for the current question to close before changing activities.' });
+    }
+
     const patch = {};
-    if (['lens', 'passport', 'decode'].includes(b.activeActivity)) patch.active_activity = b.activeActivity;
+    if (['lens', 'passport', 'decode'].includes(b.activeActivity)) {
+      patch.active_activity = b.activeActivity;
+      patch.screen_mode = 'activity';
+    }
     if (typeof b.rehearsalMode === 'boolean') patch.rehearsal_mode = b.rehearsalMode;
     if (typeof b.rosterFrozen === 'boolean') patch.roster_frozen = b.rosterFrozen;
     patch.updated_at = new Date().toISOString();
+
+    if (session && isChangingActivity) {
+      await db(`live_sessions?id=eq.${session.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          state: 'lobby',
+          current_question_id: null,
+          current_round_id: null,
+          current_clue: 1,
+          opened_at: null,
+          deadline_at: null,
+          updated_at: new Date().toISOString(),
+          version: session.version + 1
+        })
+      });
+    }
+
     const after = (await db(`event_settings?event_id=eq.${ev.id}`, { method: 'PATCH', body: JSON.stringify(patch) }))[0];
-    await audit(admin, ev, 'update_settings', 'event_settings', ev.id, null, after);
+    await audit(admin, ev, 'update_settings', 'event_settings', ev.id, currentSettings, after);
     return json(200, { settings: after });
   }
+
+  if (b.kind === 'toggle_roster_freeze') {
+    const currentSettings = (await db(`event_settings?event_id=eq.${ev.id}&select=*`))[0];
+    const newFrozen = !currentSettings?.roster_frozen;
+    const after = (await db(`event_settings?event_id=eq.${ev.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ roster_frozen: newFrozen, updated_at: new Date().toISOString() })
+    }))[0];
+    await audit(admin, ev, 'toggle_roster_freeze', 'event_settings', ev.id, currentSettings, after);
+    return json(200, { settings: after });
+  }
+
+  if (b.kind === 'moderate') {
+    const id = clean(b.id);
+    const existing = (await db(`lens_submissions?id=eq.${encodeURIComponent(id)}&select=*`))[0];
+    if (!existing) return json(404, { error: 'Response not found' });
+    const patch = {};
+    if (['approved', 'hidden', 'rejected', 'pending'].includes(b.status)) patch.status = b.status;
+    if (b.phrase) {
+      const phrase = clean(b.phrase).slice(0, 72);
+      if (phrase.length >= 1) {
+        patch.phrase = phrase;
+        patch.normalized_phrase = phrase.toLowerCase();
+      }
+    }
+    patch.reviewed_at = new Date().toISOString();
+    const after = (await db(`lens_submissions?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch)
+    }))[0];
+    publicReads.clear();
+    await audit(admin, ev, 'moderate_lens', 'lens_submission', id, existing, after);
+    return json(200, { response: after });
+  }
+
+  if (b.kind === 'clear_data') {
+    if (!['CLEAR REHEARSAL DATA', 'RESET NIAC 2026 PRODUCTION DATA'].includes(b.confirmText)) {
+      return json(422, { error: 'Confirmation did not match.' });
+    }
+    let clearedCount = 0;
+    if (b.scope === 'rehearsal') {
+      const rehearsalParticipants = await db(`participants?event_id=eq.${ev.id}&is_rehearsal=eq.true&select=id`);
+      clearedCount = rehearsalParticipants?.length || 0;
+      if (clearedCount > 0) {
+        await db(`participants?event_id=eq.${ev.id}&is_rehearsal=eq.true`, { method: 'DELETE' });
+      }
+    } else if (b.scope === 'production' && b.confirmText === 'RESET NIAC 2026 PRODUCTION DATA') {
+      const allParticipants = await db(`participants?event_id=eq.${ev.id}&select=id`);
+      clearedCount = allParticipants?.length || 0;
+      if (clearedCount > 0) {
+        await db(`participants?event_id=eq.${ev.id}`, { method: 'DELETE' });
+      }
+      if (session) {
+        await db(`live_sessions?id=eq.${session.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            state: 'lobby',
+            current_question_id: null,
+            current_round_id: null,
+            current_clue: 1,
+            opened_at: null,
+            deadline_at: null,
+            updated_at: new Date().toISOString(),
+            version: session.version + 1
+          })
+        });
+      }
+      await db(`live_question_state?session_id=eq.${session?.id}`, { method: 'DELETE' });
+    }
+    await audit(admin, ev, 'clear_data', 'event', ev.id, { scope: b.scope }, { cleared: clearedCount });
+    return json(200, { cleared: clearedCount, scope: b.scope });
+  }
+
   if (!session) return json(404, { error: 'No live session found' });
   if (b.kind === 'open_question') {
     const q = (await db(`quiz_questions?id=eq.${b.questionId}&review_status=eq.approved&is_void=eq.false&select=id,round_id,duration_seconds,quiz_rounds(quiz_games(activity))`))[0];
@@ -725,6 +876,10 @@ async function adminAction(e, admin) {
         version: session.version + 1
       })
     }))[0];
+    await db(`event_settings?event_id=eq.${ev.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active_activity: 'decode', screen_mode: 'activity', updated_at: new Date().toISOString() })
+    });
     await audit(admin, ev, 'select_question', 'live_session', session.id, session, after);
     return json(200, { session: after });
   }
@@ -753,6 +908,13 @@ async function adminAction(e, admin) {
   if (!transitions[session.state]?.includes(b.state)) return json(409, { error: `Cannot move directly from ${session.state} to ${b.state}.` });
   const patch = { state: b.state, updated_at: new Date().toISOString(), version: session.version + 1 };
   if (b.state === 'paused') patch.resume_state = session.state;
+  if (b.state === 'lobby') {
+    patch.current_question_id = null;
+    patch.current_round_id = null;
+    patch.current_clue = 1;
+    patch.opened_at = null;
+    patch.deadline_at = null;
+  }
   if (b.state === 'open') {
     if (!session.current_question_id) return json(409, { error: 'Select an approved question first.' });
     const q = (await db(`quiz_questions?id=eq.${session.current_question_id}&select=duration_seconds`))[0];
@@ -811,6 +973,9 @@ export async function handler(e) {
         res = await adminLogin(e);
       } else if (method === 'POST' && route === 'internal/deadline') {
         res = await internalDeadline(e);
+      } else if (method === 'GET' && route === 'admin/lens') {
+        const admin = await verifyAdmin(e.headers?.authorization);
+        res = await adminLens(e, admin);
       } else if (route.startsWith('admin/')) {
         const admin = await verifyAdmin(e.headers?.authorization);
         if (method === 'GET') {
