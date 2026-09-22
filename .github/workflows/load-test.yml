@@ -1,0 +1,168 @@
+name: NIAC Live Cloud Load Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: 'Participant scale tier'
+        required: true
+        type: choice
+        default: '5'
+        options:
+          - '5'
+          - '10'
+          - '50'
+          - '100'
+          - '250'
+          - '500'
+          - '750'
+          - '1000'
+      rounds:
+        description: 'Number of distinct quiz rounds'
+        required: true
+        type: choice
+        default: '1'
+        options:
+          - '1'
+          - '3'
+      burst_seconds:
+        description: 'Answer submission burst window in seconds'
+        required: true
+        type: number
+        default: 5
+      duplicate_percent:
+        description: 'Percentage of participants submitting duplicate retries'
+        required: true
+        type: number
+        default: 10
+      target_url:
+        description: 'Target Authority URL (must be Preview; Production is blocked)'
+        required: true
+        type: string
+        default: 'https://niaclive-git-codex-load-reliability-zamijudes-projects.vercel.app'
+      target_gateway_url:
+        description: 'Target Gateway URL'
+        required: true
+        type: string
+        default: 'https://92.4.146.91.sslip.io'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: niac-cloud-load-test
+  cancel-in-progress: false
+
+jobs:
+  load-test:
+    name: Cloud Load Runner (${{ inputs.tier }} Players)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository at codex/load-reliability
+        uses: actions/checkout@v4
+        with:
+          ref: codex/load-reliability
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Production Safety Gate & Target Validation
+        run: |
+          TARGET_URL="${{ inputs.target_url }}"
+          
+          # Strictly block Production targets
+          if [[ "$TARGET_URL" == *"niaclive.vercel.app"* ]] && [[ "$TARGET_URL" != *"git-"* ]]; then
+            echo "::error::Production target ($TARGET_URL) is explicitly blocked on this load runner."
+            exit 1
+          fi
+          
+          # Verify target is HTTPS
+          if [[ "$TARGET_URL" != "https://"* ]]; then
+            echo "::error::HTTPS target required. Got: $TARGET_URL"
+            exit 1
+          fi
+          
+          echo "Target validated as non-production Preview: $TARGET_URL"
+
+      - name: Read-Only Preflight Checks
+        env:
+          NIAC_BASE_URL: ${{ inputs.target_url }}
+          NIAC_GATEWAY_URL: ${{ inputs.target_gateway_url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          node -e "
+          import { preflight } from './scripts/load/preflight.mjs';
+          const res = await preflight(process.env);
+          console.log(JSON.stringify(res, null, 2));
+          const failedChecks = res.checks.filter(c => c.status !== 200);
+          if (failedChecks.length > 0) {
+            console.error('Preflight checks failed:', failedChecks);
+            process.exit(1);
+          }
+          if (res.gatewayHealth?.queueDepth !== 0) {
+            console.error('Gateway queue is not empty before test start:', res.gatewayHealth?.queueDepth);
+            process.exit(1);
+          }
+          "
+
+      - name: Prepare Rehearsal Participants
+        id: prepare
+        env:
+          NIAC_BASE_URL: ${{ inputs.target_url }}
+          NIAC_GATEWAY_URL: ${{ inputs.target_gateway_url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          RUN_ID="cloud-${{ inputs.tier }}p-r${{ github.run_id }}"
+          echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+          echo "Run ID: $RUN_ID"
+          
+          node scripts/load/prepare.mjs \
+            --participants ${{ inputs.tier }} \
+            --join-rate 10 \
+            --run-id "$RUN_ID"
+
+      - name: Run Calibrated Load Tier
+        env:
+          NIAC_BASE_URL: ${{ inputs.target_url }}
+          NIAC_GATEWAY_URL: ${{ inputs.target_gateway_url }}
+          NIAC_RUN_ID: ${{ env.RUN_ID }}
+          ADMIN_PIN: ${{ secrets.ADMIN_PIN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          node scripts/load/run-tier.mjs \
+            --participants ${{ inputs.tier }} \
+            --rounds ${{ inputs.rounds }} \
+            --burst-seconds ${{ inputs.burst_seconds }} \
+            --duplicate-percent ${{ inputs.duplicate_percent }} \
+            --run-id "$RUN_ID"
+
+      - name: Verify Rehearsal Isolation & Leaderboard Integrity
+        env:
+          NIAC_BASE_URL: ${{ inputs.target_url }}
+          NIAC_RUN_ID: ${{ env.RUN_ID }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          node scripts/load/verify.mjs --run-id "$RUN_ID"
+
+      - name: Strip Credential Manifests & Tokens Before Archiving
+        if: always()
+        run: |
+          EVIDENCE_DIR="artifacts/load/${{ env.RUN_ID }}"
+          if [ -d "$EVIDENCE_DIR" ]; then
+            echo "Removing private credentials manifest (tokens and signing keys) from evidence directory..."
+            rm -f "$EVIDENCE_DIR/credentials.json"
+          fi
+
+      - name: Upload Test Evidence Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-evidence-${{ inputs.tier }}p-run-${{ github.run_id }}
+          path: artifacts/load/${{ env.RUN_ID }}/
+          retention-days: 14
