@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tier:
-        description: 'Participant scale tier'
+        description: 'Participant scale tier (capped at 100)'
         required: true
         type: choice
         default: '5'
@@ -13,10 +13,6 @@ on:
           - '10'
           - '50'
           - '100'
-          - '250'
-          - '500'
-          - '750'
-          - '1000'
       rounds:
         description: 'Number of distinct quiz rounds'
         required: true
@@ -36,7 +32,7 @@ on:
         type: number
         default: 10
       target_url:
-        description: 'Target Authority URL (must be Preview unless confirmed)'
+        description: 'Target Authority URL (must be Preview; Production is blocked)'
         required: true
         type: string
         default: 'https://niaclive-git-codex-load-reliability-zamijudes-projects.vercel.app'
@@ -45,28 +41,25 @@ on:
         required: true
         type: string
         default: 'https://92.4.146.91.sslip.io'
-      confirm_production:
-        description: 'Must type "I CONFIRM PRODUCTION LOAD" if targeting production'
-        required: false
-        type: string
-        default: ''
-      cleanup_mode:
-        description: 'Cleanup mode after test completion'
-        required: true
-        type: choice
-        default: 'dry-run'
-        options:
-          - 'dry-run'
-          - 'confirmed-purge'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: niac-cloud-load-test
+  cancel-in-progress: false
 
 jobs:
   load-test:
     name: Cloud Load Runner (${{ inputs.tier }} Players)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - name: Check out repository
+      - name: Check out repository at codex/load-reliability
         uses: actions/checkout@v4
+        with:
+          ref: codex/load-reliability
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -76,17 +69,20 @@ jobs:
       - name: Production Safety Gate & Target Validation
         run: |
           TARGET_URL="${{ inputs.target_url }}"
-          CONFIRM_PROD="${{ inputs.confirm_production }}"
           
+          # Strictly block Production targets
           if [[ "$TARGET_URL" == *"niaclive.vercel.app"* ]] && [[ "$TARGET_URL" != *"git-"* ]]; then
-            if [[ "$CONFIRM_PROD" != "I CONFIRM PRODUCTION LOAD" ]]; then
-              echo "::error::Production target detected without explicit confirmation. Aborting."
-              exit 1
-            fi
-            echo "Production target confirmed by operator."
-          else
-            echo "Target validated as non-production Preview: $TARGET_URL"
+            echo "::error::Production target ($TARGET_URL) is explicitly blocked on this load runner."
+            exit 1
           fi
+          
+          # Verify target is HTTPS
+          if [[ "$TARGET_URL" != "https://"* ]]; then
+            echo "::error::HTTPS target required. Got: $TARGET_URL"
+            exit 1
+          fi
+          
+          echo "Target validated as non-production Preview: $TARGET_URL"
 
       - name: Read-Only Preflight Checks
         env:
@@ -98,8 +94,6 @@ jobs:
           import { preflight } from './scripts/load/preflight.mjs';
           const res = await preflight(process.env);
           console.log(JSON.stringify(res, null, 2));
-          // Preflight readyForLoad is always false because of manual host checks,
-          // so we verify that the network/CORS checks themselves succeeded.
           const failedChecks = res.checks.filter(c => c.status !== 200);
           if (failedChecks.length > 0) {
             console.error('Preflight checks failed:', failedChecks);
@@ -152,46 +146,13 @@ jobs:
         run: |
           node scripts/load/verify.mjs --run-id "$RUN_ID"
 
-      - name: Rehearsal Cleanup
-        if: always()
-        env:
-          NIAC_BASE_URL: ${{ inputs.target_url }}
-          ADMIN_PIN: ${{ secrets.ADMIN_PIN }}
-          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: |
-          CLEANUP_MODE="${{ inputs.cleanup_mode }}"
-          if [[ "$CLEANUP_MODE" == "confirmed-purge" ]]; then
-            echo "Executing confirmed rehearsal data cleanup..."
-            node scripts/load/cleanup.mjs --confirm "CLEAR REHEARSAL DATA"
-          else
-            echo "Executing dry-run rehearsal cleanup inspection..."
-            node scripts/load/cleanup.mjs --dry-run
-          fi
-
-      - name: Sanitize Evidence (Strip Sensitive Tokens & Credentials)
+      - name: Strip Credential Manifests & Tokens Before Archiving
         if: always()
         run: |
           EVIDENCE_DIR="artifacts/load/${{ env.RUN_ID }}"
           if [ -d "$EVIDENCE_DIR" ]; then
-            echo "Sanitizing evidence in $EVIDENCE_DIR..."
-            if [ -f "$EVIDENCE_DIR/credentials.json" ]; then
-              # Redact bearer tokens and signing credentials from manifest before archive
-              node -e "
-              const fs = require('fs');
-              const p = '$EVIDENCE_DIR/credentials.json';
-              const d = JSON.parse(fs.readFileSync(p, 'utf8'));
-              d.participants = (d.participants || []).map(x => ({
-                index: x.index,
-                id: x.id,
-                alias: x.alias,
-                isRehearsal: x.isRehearsal,
-                durationMs: x.durationMs
-              }));
-              fs.writeFileSync('$EVIDENCE_DIR/sanitized-manifest.json', JSON.stringify(d, null, 2));
-              fs.unlinkSync(p);
-              "
-              echo "credentials.json redacted and replaced with sanitized-manifest.json"
-            fi
+            echo "Removing private credentials manifest (tokens and signing keys) from evidence directory..."
+            rm -f "$EVIDENCE_DIR/credentials.json"
           fi
 
       - name: Upload Test Evidence Artifact
