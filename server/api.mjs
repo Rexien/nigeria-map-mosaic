@@ -686,7 +686,14 @@ async function updateQuestion(e, admin) {
 async function adminAction(e, admin) {
   const b = JSON.parse(e.body || '{}');
   const ev = await event();
-  let session = (await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`))[0];
+  const openQuestionPromise = b.kind === 'open_question'
+    ? db(`quiz_questions?id=eq.${b.questionId}&review_status=eq.approved&is_void=eq.false&select=*,question_options(option_index,label),quiz_rounds(day,game_id,quiz_games(activity,title))`)
+    : Promise.resolve(null);
+  const [sessionRows, openQuestionRows] = await Promise.all([
+    db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`),
+    openQuestionPromise
+  ]);
+  let session = sessionRows[0];
 
   if (b.kind === 'show_welcome') {
     if (session?.state === 'open') {
@@ -839,7 +846,7 @@ async function adminAction(e, admin) {
 
   if (!session) return json(404, { error: 'No live session found' });
   if (b.kind === 'open_question') {
-    const q = (await db(`quiz_questions?id=eq.${b.questionId}&review_status=eq.approved&is_void=eq.false&select=id,round_id,duration_seconds,quiz_rounds(quiz_games(activity))`))[0];
+    const q = openQuestionRows?.[0];
     if (!q) return json(422, { error: 'Only approved, non-void questions can be opened.' });
     if (session.state === 'open') return json(409, { error: 'A question is already open.' });
     if (session.state === 'ended') return json(409, { error: 'Return to the welcome screen before opening a question.' });
@@ -866,12 +873,64 @@ async function adminAction(e, admin) {
         version: session.version + 1
       })
     }))[0];
-    await db(`event_settings?event_id=eq.${ev.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ active_activity: activity, screen_mode: 'activity', updated_at: now.toISOString() })
-    });
-    await audit(admin, ev, 'open_question', 'live_session', session.id, session, after);
-    return json(200, { session: after });
+    const decodePromise = activity === 'decode'
+      ? db(`decode_state_rounds?round_id=eq.${q.round_id}&select=clues,clue_media,state_geo_id,reveal_fact`)
+      : Promise.resolve(null);
+    const [, decodeRows] = await Promise.all([
+      db(`event_settings?event_id=eq.${ev.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active_activity: activity, screen_mode: 'activity', updated_at: now.toISOString() })
+      }),
+      decodePromise,
+      audit(admin, ev, 'open_question', 'live_session', session.id, session, after)
+    ]);
+    const round = q.quiz_rounds;
+    const game = round?.quiz_games;
+    const options = (q.question_options || []).slice().sort((a, b) => a.option_index - b.option_index);
+    const question = {
+      id: q.id,
+      activity: game?.activity || activity,
+      title: game?.title,
+      day: round?.day,
+      order: q.display_order || null,
+      category: q.category,
+      question: q.question,
+      durationSeconds: q.duration_seconds,
+      imageUrl: q.image_url,
+      altText: q.alt_text,
+      media: q.media || null,
+      fallback: q.image_fallback || null,
+      options: options.map(option => option.label)
+    };
+    if (activity === 'decode') {
+      const decode = decodeRows?.[0];
+      question.clueNumber = clueNum;
+      question.clue = decode?.clues?.[clueNum - 1] || null;
+      if (decode?.clue_media?.[clueNum - 1]) {
+        question.media = decode.clue_media[clueNum - 1];
+        question.imageUrl = question.media.src;
+        question.altText = question.media.alt;
+        question.fallback = question.media.fallback;
+      }
+      question.cluesSoFar = (decode?.clues || []).slice(0, clueNum);
+      question.clueMediaSoFar = (decode?.clue_media || []).slice(0, clueNum);
+    }
+    const result = json(200, { session: after });
+    result.gatewayEnvelope = createStateEnvelope({
+      event: ev,
+      eventId: ev.id,
+      sessionId: after.id,
+      version: after.version,
+      state: after.state,
+      activity,
+      screenMode: 'activity',
+      currentClue: after.current_clue,
+      openedAt: after.opened_at,
+      deadlineAt: after.deadline_at,
+      responseCount: 0,
+      serverNow: new Date().toISOString()
+    }, question);
+    return result;
   }
   if (b.kind === 'select_question') {
     const q = (await db(`quiz_questions?id=eq.${b.questionId}&review_status=eq.approved&is_void=eq.false&select=id,round_id`))[0];
@@ -1006,8 +1065,11 @@ export async function handler(e) {
       if (mutated) {
         publicReads.clear();
         rankingReads.clear();
+        const gatewayEnvelope = res?.gatewayEnvelope;
+        if (res?.gatewayEnvelope) delete res.gatewayEnvelope;
         try {
-          await pushGatewayState();
+          if (gatewayEnvelope) await gatewayCall('broadcast', gatewayEnvelope);
+          else await pushGatewayState();
         } catch (error) {
           console.error(formatLog('error', 'gateway_broadcast_failed', { requestId, error: error.message }));
         }
