@@ -245,11 +245,14 @@ export function startAuthoritySync(options={}){
   return controller;
 }
 
-export function createSupabaseSink(url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY){
+export function createSupabaseSink(url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY,options={}){
   if(!url||!key)return null;
+  const timeoutMs=Number(options.timeoutMs ?? process.env.SUPABASE_FLUSH_TIMEOUT_MS ?? 4000);
+  if(!Number.isInteger(timeoutMs)||timeoutMs<1)throw new Error('Invalid Supabase flush timeout');
   return async items=>{
     const response=await fetch(`${url}/rest/v1/gateway_answers?on_conflict=participant_id,question_id`,{
       method:'POST',
+      signal:AbortSignal.timeout(timeoutMs),
       headers:{apikey:key,Authorization:`Bearer ${key}`,'Content-Type':'application/json',Prefer:'resolution=ignore-duplicates,return=minimal'},
       body:JSON.stringify(items.map(item=>({
         id:item.answer_id,participant_id:item.participant_id,session_id:item.session_id,question_id:item.question_id,

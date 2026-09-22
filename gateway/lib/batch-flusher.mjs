@@ -88,7 +88,19 @@ export class BatchFlusher {
       if (Date.now() - start > timeoutMs) {
         throw new Error(`Queue drain timeout exceeded (${timeoutMs}ms). Remaining depth: ${this.queue.getQueueDepth()}`);
       }
-      await this.flushOnce();
+      const remainingMs = Math.max(1, timeoutMs - (Date.now() - start));
+      let timer;
+      try {
+        // Keep the active flush locked even when this caller times out.
+        await Promise.race([
+          this.flushOnce(),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error(`Queue drain timeout exceeded (${timeoutMs}ms)`)), remainingMs);
+          })
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
       if (this.queue.getQueueDepth() > 0) {
         await new Promise(r => setTimeout(r, 20));
       }

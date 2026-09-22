@@ -124,11 +124,9 @@ export class SQLiteAnswerQueue {
       (p.item.questionId === questionId || p.item.idempotencyKey === idempotencyKey)
     );
     if (pendingExisting) {
-      return {
-        accepted: true,
-        duplicate: true,
-        answerId: pendingExisting.item.answerId
-      };
+      return new Promise((resolve, reject) => {
+        pendingExisting.waiters.push({ resolve, reject });
+      });
     }
 
     const record = {
@@ -145,7 +143,17 @@ export class SQLiteAnswerQueue {
     };
 
     return new Promise((resolve, reject) => {
-      this.pendingCommits.push({ item: record, resolve, reject });
+      const waiters = [];
+      this.pendingCommits.push({ item: record, waiters,
+        resolve: result => {
+          resolve(result);
+          for (const waiter of waiters) waiter.resolve({ ...result, duplicate: true });
+        },
+        reject: error => {
+          reject(error);
+          for (const waiter of waiters) waiter.reject(error);
+        }
+      });
 
       if (this.pendingCommits.length >= this.options.groupCommitBatchSize) {
         clearTimeout(this.commitTimer);
