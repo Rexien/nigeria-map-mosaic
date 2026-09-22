@@ -33,10 +33,11 @@ export async function runTier(options = {}) {
   const burstSeconds = Number(options.burstSeconds || 5);
   const duplicatePercent = Number(options.duplicatePercent || 10);
   const rounds = Number(options.rounds || 1);
+  const fanoutAbortMs = Number(options.fanoutAbortMs || 2000);
   const adminPin = options.adminPin || env.ADMIN_PIN;
   if(!adminPin)throw new Error('ADMIN_PIN is required');
   if(!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Refusing load without durable verification credentials');
-  if(!Number.isInteger(rounds)||rounds<1||!Number.isInteger(targetParticipants)||targetParticipants<1||participants.length!==targetParticipants||burstSeconds<1||duplicatePercent<0||duplicatePercent>100)throw new Error('Invalid tier parameters');
+  if(!Number.isInteger(rounds)||rounds<1||!Number.isInteger(targetParticipants)||targetParticipants<1||participants.length!==targetParticipants||burstSeconds<1||duplicatePercent<0||duplicatePercent>100||fanoutAbortMs<2000)throw new Error('Invalid tier parameters');
   if(manifest.baseUrl!==baseUrl || manifest.gatewayUrl!==gatewayUrl)throw new Error('Manifest target mismatch');
   const bypassSecret = env.VERCEL_AUTOMATION_BYPASS_SECRET || null;
 
@@ -123,7 +124,7 @@ export async function runTier(options = {}) {
     if (fanout) {
       console.log(`  ✓ Fanout Receipt: ${fanout.receivedCount}/${participants.length} streams (p50: ${fanout.p50Ms}ms, p95: ${fanout.p95Ms}ms)`);
     }
-    if(!fanout || fanout.receivedCount!==participants.length || fanout.p95Ms>1000 || fanout.p99Ms>2000)throw new Error('Fanout gate failed; no answer burst sent');
+    if(!fanout || fanout.receivedCount!==participants.length || fanout.p99Ms>fanoutAbortMs)throw new Error('Fanout gate failed; no answer burst sent');
     if(deadlineAt-Date.now()<burstSeconds*1000+4000)throw new Error('Insufficient remaining answer window');
 
     // Schedule and dispatch answers
@@ -271,8 +272,9 @@ export async function runTier(options = {}) {
   const expectedTotal = participants.length * rounds;
   const zeroLoss = totalFirstAttempts === expectedTotal;
   const p95WithinSla = roundReports.every(r => r.latencies.p95 <= 1000 && r.latencies.p99 <= 1500);
+  const fanoutWithinSla = roundReports.every(r => r.fanout.p95Ms <= 1000 && r.fanout.p99Ms <= 2000);
 
-  const passed = zeroLoss && p95WithinSla && readPassCount===participants.length && roundReports.every(r=>r.durable.passed);
+  const passed = zeroLoss && p95WithinSla && fanoutWithinSla && readPassCount===participants.length && roundReports.every(r=>r.durable.passed);
 
   const report = {
     runId,
@@ -283,6 +285,8 @@ export async function runTier(options = {}) {
     duplicatePercent,
     zeroLoss,
     p95WithinSla,
+    fanoutWithinSla,
+    fanoutAbortMs,
     readPassCount,
     readLatencies,
     certification:'Partial answer-path test only; full scoring, recovery and resource gates remain required',
@@ -298,6 +302,7 @@ export async function runTier(options = {}) {
   console.log(`  TIER RESULT FOR ${participants.length} PARTICIPANTS: ${passed ? 'PASSED' : 'FAILED'}`);
   console.log(`  - Zero Loss Gate:  ${zeroLoss ? 'PASS' : 'FAIL'} (${totalFirstAttempts}/${expectedTotal})`);
   console.log(`  - p95 Latency SLA: ${p95WithinSla ? 'PASS' : 'FAIL'}`);
+  console.log(`  - Fanout SLA:      ${fanoutWithinSla ? 'PASS' : 'FAIL'}`);
   console.log(`  - Report File:     ${reportPath}`);
   console.log(`=============================================================\n`);
 
@@ -320,9 +325,10 @@ if (process.argv[1] && process.argv[1].endsWith('run-tier.mjs')) {
   const burstSeconds = Number(getArg('--burst-seconds', 5));
   const duplicatePercent = Number(getArg('--duplicate-percent', 10));
   const rounds = Number(getArg('--rounds', 1));
+  const fanoutAbortMs = Number(getArg('--fanout-abort-ms', 2000));
   const runId = getArg('--run-id', process.env.NIAC_RUN_ID || `rehearsal-${Date.now()}`);
 
-  runTier({ participants, burstSeconds, duplicatePercent, rounds, runId })
+  runTier({ participants, burstSeconds, duplicatePercent, rounds, fanoutAbortMs, runId })
     .then(report => process.exit(report.passed ? 0 : 1))
     .catch(err => {
       console.error('[Run-Tier Error]', err);

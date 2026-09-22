@@ -83,3 +83,12 @@ The original AG recommendations below are retained as handoff history, not appro
    - Pass `fallbackUrl: baseUrl` into `submitAnswer` options in `run-tier.mjs` so network timeouts gracefully test the Vercel authority fallback path rather than failing outright.
 2. Re-run Tier 2 (100 participants) with connection reuse.
 3. Advance through the calibrated ladder: Tier 3 (250) -> Tier 4 (500) -> Tier 5 (1,000).
+
+## Codex deployed revalidation — 22 September 2026
+
+- Preview `codex/load-reliability` and Oracle CORS/health passed read-only preflight; both `niac-gateway` and `eplbot` remained active.
+- The corrected harness initially stopped before answers because command-to-client question-open latency was 3.00–5.47 seconds. Oracle delivered each broadcast to all five listeners within about 5 ms once received; the delay was the Vercel/Supabase control path, not SSE fanout capacity.
+- The open-question path now reuses its authoritative mutation data and broadcasts without rereading the same state from Supabase. A later warm smoke delivered to all five listeners in 1.24 seconds. This is below the 2-second p99 limit but above the strict 1-second p95 target, so it remains a failed SLA sample rather than a capacity pass.
+- A diagnostic-only abort override allowed the remainder of that five-player round to run while preserving `fanoutWithinSla: false`. All 5 first answers were accepted, the retry was identified as a duplicate, Oracle recorded 19–39 ms handler time, the queue drained to zero, and read-only Supabase reconciliation found exactly 5 matching durable rows with no option/session/answer-ID mismatch.
+- The laptop observed 1.60–3.97 second answer round trips and intermittent direct Supabase connection timeouts while Oracle remained healthy. Treat this as an impaired generator/network path until reproduced from a stable offsite runner; do not attribute it to gateway capacity and do not advance the capacity ladder from this laptop connection.
+- Rehearsal isolation sampling passed for all five profiles and public Top 10 leakage was zero. The test identities remain present pending explicit cleanup approval.
