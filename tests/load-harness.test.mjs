@@ -4,6 +4,13 @@ import http from 'node:http';
 import {submitAnswer} from '../scripts/load/client-worker.mjs';
 import {SSEObserverPool} from '../scripts/load/sse-observer.mjs';
 import {reconcileAnswers} from '../scripts/load/durable.mjs';
+import {rehearsalAlias} from '../scripts/load/prepare.mjs';
+
+test('rehearsal aliases remain valid for long run IDs',()=>{
+  const alias=rehearsalAlias('phase2-smoke-20260922-155509',1);
+  assert.ok(alias.length>=2 && alias.length<=30);
+  assert.match(alias,/[\p{L}\p{N}]/u);
+});
 
 test('HTTP 409 is not automatically a duplicate; attempt identity is preserved',async()=>{
   const original=globalThis.fetch;

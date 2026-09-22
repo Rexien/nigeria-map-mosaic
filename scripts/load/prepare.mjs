@@ -8,6 +8,11 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+export function rehearsalAlias(runId, index) {
+  const aliasRun = String(runId).replace(/[^\p{L}\p{N}]/gu, '').slice(-18) || Date.now().toString(36);
+  return `Reh${aliasRun}${String(index).padStart(4, '0')}`;
+}
+
 export async function prepareParticipants(options = {}) {
   const env = options.env || process.env;
   const baseUrl = (options.baseUrl || env.NIAC_BASE_URL || 'https://niaclive-git-feature-admin-pin-auth-zamijudes-projects.vercel.app').replace(/\/$/, '');
@@ -47,9 +52,8 @@ export async function prepareParticipants(options = {}) {
   const delayMs = Math.max(10, Math.floor(1000 / joinRate));
   const participants = [];
   const startMs = Date.now();
-
   for (let i = 1; i <= count; i++) {
-    const alias = `Rehearsal_${runId}_${String(i).padStart(4, '0')}`;
+    const alias = rehearsalAlias(runId, i);
     const payload = {
       alias,
       eventId,

@@ -390,8 +390,11 @@ async function recover(e) {
 
 async function buildLiveState(skipAuto = false) {
   const ev = await event();
-  const settings = (await db(`event_settings?event_id=eq.${ev.id}&select=active_activity,screen_mode`))[0];
-  const sessions = await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`);
+  const [settingsRows, sessions] = await Promise.all([
+    db(`event_settings?event_id=eq.${ev.id}&select=active_activity,screen_mode`),
+    db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`)
+  ]);
+  const settings = settingsRows[0];
   const s = skipAuto ? sessions[0] : await autoRevealSession(sessions[0]);
   if (!s) {
     const envelope = createStateEnvelope({
@@ -406,11 +409,11 @@ async function buildLiveState(skipAuto = false) {
   }
   let question = null;
   if (s.current_question_id && (s.state === 'preparing' || ['open', 'locked', 'revealed', 'leaderboard', 'round_complete'].includes(s.state))) {
-    const q = (await db(`quiz_questions?id=eq.${s.current_question_id}&select=*`))[0];
+    const q = (await db(`quiz_questions?id=eq.${s.current_question_id}&select=*,question_options(option_index,label),quiz_rounds(day,game_id,quiz_games(activity,title))`))[0];
     if (q) {
-      const options = await db(`question_options?question_id=eq.${q.id}&select=option_index,label&order=option_index`);
-      const round = (await db(`quiz_rounds?id=eq.${q.round_id}&select=day,game_id`))[0];
-      const game = (await db(`quiz_games?id=eq.${round.game_id}&select=activity,title`))[0];
+      const options = (q.question_options || []).slice().sort((a, b) => a.option_index - b.option_index);
+      const round = q.quiz_rounds;
+      const game = round?.quiz_games;
       question = {
         id: q.id,
         activity: game.activity,

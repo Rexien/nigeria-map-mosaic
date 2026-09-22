@@ -403,7 +403,21 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
         const match = urlStr.match(/id=eq\.([^&]+)/);
         if (match) {
           const q = mockQuestions[match[1]];
-          return new Response(JSON.stringify(q ? [q] : []), { status: 200 });
+          if (!q) return new Response(JSON.stringify([]), { status: 200 });
+          const activity = q.quiz_rounds.quiz_games.activity;
+          const nested = {
+            ...q,
+            question_options: mockOptions[match[1]] || [],
+            quiz_rounds: {
+              day: 1,
+              game_id: activity === 'decode' ? 'game-d' : 'game-p',
+              quiz_games: {
+                activity,
+                title: activity === 'decode' ? 'Decode the State' : 'Naija Passport Challenge'
+              }
+            }
+          };
+          return new Response(JSON.stringify([nested]), { status: 200 });
         }
         return new Response(JSON.stringify(Object.values(mockQuestions)), { status: 200 });
       }
