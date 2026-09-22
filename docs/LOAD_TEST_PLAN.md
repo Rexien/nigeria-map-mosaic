@@ -254,6 +254,66 @@ After each run record planned/actual arrivals; eligible first requests; success/
 
 **Stop here for plan approval. No large deployed load test, gateway restart, environment mutation or paid tool purchase has been performed for this plan.**
 
+## 13. DevOps sign-off review: five architecture checks
+
+Reviewed 22 September 2026 against checkout `8af6a52`, including the local reliability fixes. AG is concurrently preparing deployment; this is source inspection, not evidence of the deployed revision or installed database functions. Only this document was changed for the review. Preserve AG's deployment/load scripts.
+
+### Summary classifications
+
+| Area | Classification | Decision |
+| --- | --- | --- |
+| Database connection pooling | **already correctly handled** at the application connection-model level | Authority and gateway use Supabase REST, not a PostgreSQL socket per user. No application PgBouncer change justified. Provider pool/DB capacity still needs measured proof. |
+| Race conditions in vote tallying | **handled but needs load-test proof** for canonical scoring | Immutable rows, drain barrier, deterministic snapshots and uniqueness replace a shared score increment. Concurrent close/reveal and cross-route persistence need explicit tests; do not add atomic score increments. |
+| SSE/WebSocket versus polling | **handled but needs load-test proof** | Actual browser path is SSE with fallback polling, not WebSocket-dependent. Test fanout, reconnect and fallback pressure; no WebSocket rewrite needed. |
+| Caching active question/options | **handled but needs load-test proof** | Gateway caches the complete public envelope; authority has short process-local cache/single-flight. Test invalidation and cold/multi-instance load; do not assume a global cache. |
+| Duplicate submission prevention | **genuine gap requiring a change** across the complete gateway/fallback path | Normal gateway uniqueness and commit-wait behavior are implemented, but fallback RPC contract and ambiguous cross-route retries are not safe to sign off as currently documented/implemented. |
+
+### 13.1 Database connection pooling
+
+Evidence: `server/db.mjs::db` uses fetch to `/rest/v1`; `gateway/server.mjs::createSupabaseSink` POSTs batched answers to the same REST interface. There is no direct application PostgreSQL client in these paths. Database sessions are managed behind Supabase's REST/PostgREST service, not allocated once per participant by this app. A Supavisor/PgBouncer connection string cannot simply replace a REST base URL. This classification concerns the architecture choice, NOT proof that the hosted pool is adequately sized or correctly tuned.
+
+**Test POOL-1:** run staged join, answer-flush, reveal and `/me` phases separately and together. Record REST latency/status by operation, batch size/duration, database active/waiting connections and locks where available, and provider timeout/resource errors. Distinguish client socket counts from database connections. Require zero connection/pool-acquisition errors, zero lost answers, bounded drain and Section 8 latency gates. Report unavailable provider metrics as unavailable. Only investigate pool sizing/direct-SQL pooling if observed errors and actual installed configuration justify it; first inspect expensive queries, locks and batch latency.
+
+### 13.2 Race conditions in vote tallying
+
+Evidence: `gateway/lib/sqlite-queue.mjs` has participant/question uniqueness; Supabase `gateway_answers` has the same uniqueness in `202609140001_snapshot_scoring.sql`. `server/api.mjs::finalizeReveal` locks/drains before `computeAndPersistSnapshots`, then publishes reveal. Snapshot generation uses answer rows and deterministic tie-breaking, with unique snapshot version keys. Legacy `participant_answers` are preferred when merging duplicate participant/question identities. There is no need to introduce shared score counters or Redis atomic increments for canonical scoring.
+
+This is not a blanket transactional guarantee: snapshot writes occur in several REST operations, simultaneous deadline/admin calls can both begin work, and conditional final session PATCH alone does not serialize all earlier work. The authority answer route also calls an ancillary response-count RPC (see 13.5); do not confuse it with the scoring engine. Public state currently sets `responseCount: 0`, so correctness must be checked from records, not that display count.
+
+**Test RACE-1:** burst known correct/wrong responses, overlap final eligible answers with lock, and trigger two identical deadline/reveal requests concurrently. Inject a failed snapshot batch in an isolated/local fixture, not on the shared VM. Assert: no revealed event before all accepted rows drain AND all expected snapshots persist; exactly one logical score per participant/question; repeat finalization yields identical results; no version regression; `/me` and Top 10 refer to the same completed snapshot. Independently recompute scores/tie breaks from durable rows. Include legacy/new-row duplicates and document precedence. A failed partial snapshot must not be advertised as complete. Any violation becomes a required fix, not something higher traffic can excuse.
+
+### 13.3 SSE/WebSocket versus polling
+
+Evidence: `js/niac-transport.js` uses EventSource advertised by `/api/bootstrap`. Gateway serves cached initial state, broadcasts updates, and sends 15-second keepalives. Healthy SSE cancels fallback polling; browser countdown is local. On SSE failure, polling is jittered at 3–5 seconds and SSE reconnect uses backoff. `js/supabase-client.js` separately polls Lens approved data every 3 seconds per display. A server WebSocket clients collection does not mean the browser uses WebSockets.
+
+**Test STREAM-1:** hold 1,000 real SSE sockets, then conditional 1,500, through open/lock/reveal/leaderboard/next-question. Measure receipt by version, not only server writes. Assert no missing final state, fanout gates in Section 8, and no periodic `/api/state` traffic from healthy quiz clients. Count Lens polling separately.
+
+**Test STREAM-2:** disconnect 10%, then reconnect all with jitter; test offline/online and hidden-tab/visible transitions in real browsers. Assert one stream per participant, bounded reconnect attempts, latest state on return, and fallback polling ceases on recovery. Code inspection caveat: reconnect timeouts are not tracked/cancelled by `destroy`, and a reconnect timer skipped while hidden is not explicitly rescheduled on visibility return (which only polls). Add deterministic lifecycle regression tests; if these reproduce stale reconnects or permanent polling after recovery, make a narrow lifecycle fix before fallback sign-off. At scale, measure the expected ~200–333 state polls/s for 1,000 fallback clients; do not claim normal SSE throughput proves that path's capacity.
+
+### 13.4 Caching the active question/options
+
+Evidence: gateway `cachedEnvelope` contains public question/options and is used directly for SSE and answer validation, without per-answer question DB reads. Authority `liveState` uses `publicReads.get('state',500,...)`; `createReadCache` coalesces pending reads in one process and expires open-state cache at the deadline. Mutation handlers clear local caches and push gateway state; event metadata is cached 30 seconds. Options are already inside the state cache, not a separate query per connected phone. These caches are NOT shared among Vercel instances. JSON responses are `no-store`, so CDN/browser caching is not the mechanism.
+
+**Test CACHE-1:** instrument DB requests in a fixture: concurrent identical state reads should coalesce within one instance; gateway answer bursts should cause no question/options REST lookup per answer. Then measure cold and multiple-instance authority reads rather than extrapolating one warm process.
+
+**Test CACHE-2:** warm state caches, change approved question/options through admin, open next question, lock and reveal while clients reconnect/poll. Assert options always match question ID/version, no answer/explanation leaks before reveal, old states never overwrite newer client state, and stale open envelopes cannot accept after deadline. Measure mutation-to-client freshness against fanout gates, including another authority instance with an unexpired 500 ms cache. Inject failed broadcast locally to test reconciliation; record its actual delay rather than assuming immediate recovery from the 60-second reconciliation schedule.
+
+### 13.5 Duplicate prevention: concrete gaps and required assertions
+
+Normal gateway path: SQLite unique participant/question and participant/idempotency indexes, transactional commits, Supabase conflict-ignore writes and DB unique indexes prevent duplicate rows. Commit `e752340` makes in-memory duplicate acknowledgments await the original commit outcome. `tests/queue-durability.test.mjs` covers commit failure; deployed installation still needs verification.
+
+**Confirmed repository contract mismatch:** `server/api.mjs::answer` generates a text key `participantId:questionId` and calls `submit_raw_quiz_answer` with `p_participant_id`, `p_clue_number`, `p_response_ms`, etc. The tracked SQL defines the function with `p_token_hash`, session/question/option and a UUID idempotency key instead. The preceding gateway-answer lookup compares that text key against the UUID column. The route also invokes `increment_live_response_count`, whose definition was not found in the tracked Supabase migrations, ignores the answer RPC's duplicate result, and does not bind submitted session/question IDs to the selected active session. An untracked hosted overload may exist; inspect installed signatures before choosing the fix, but the checked-in API/schema pair is not reproducible as-is. Do not report this as a confirmed production failure without exercising/inspecting that deployment.
+
+**Cross-route ordering gap:** gateway acknowledgment means local SQLite durability, before Supabase flush. If its response is lost, fallback may insert a different option/time into Supabase first. Gateway conflict-ignore then marks its original row flushed without comparing the winning payload. Unique row count alone can pass while the accepted answer or response-time tie-break changes. The client can also omit/stale its requested question on fallback while authority selects the latest open session/question. These require a defined, enforced canonical retry contract, not additional shared-counter increments.
+
+**Test DUP-1 (contract smoke before scale):** in an isolated fixture or approved shared rehearsal, force gateway failure for one player and send the real browser fallback payload. Assert RPC resolves, HTTP success matches an actual durable row, requested session/question are honored, and stale/missing/mismatched IDs are rejected. Verify installed SQL signatures/constraints against versioned migrations. Check valid UUID keys and duplicate result propagation; remove or correctly define/use the ancillary counter call without making a persisted answer appear failed.
+
+**Test DUP-2 (parallel/recovery):** simultaneous identical and changed-option retries with same and different idempotency keys; 10–20% duplicates across the burst; local commit failure; drop gateway ACK after commit; delay durable flush while forcing fallback. Assert one logical answer and one award; duplicate cannot change first accepted option OR response time; no success before local durability; no NULL/missing answer ID claimed as success; every accepted receipt reconciles to matching durable payload. Compare fields, not just counts. Test after close/reveal and across question changes. A lost-response retry must be distinguishable from an unrecorded late answer without assigning it to the next question.
+
+### Sign-off boundary and coordination
+
+The five checks do not mandate a stack change. Pooling, push transport, caching and snapshot scoring are mostly the right choices; the fallback contract and cross-route retry semantics need attention before full sign-off. AG should complete a tiny deployed fallback smoke before a large run and inspect hosted RPC definitions without exporting unrelated data. This review performs no deployment, API writes or load run. Current user permission allows shared rehearsal despite trial visitors; it does NOT remove correctness gates, monitoring, or the prohibition on deleting participants without explicit authorization. Earlier isolation recommendations in this plan should be read with that updated operational decision.
+
 ## References
 
 - Repository: `server/api.mjs`, `server/db.mjs`, `gateway/server.mjs`, `gateway/lib/sqlite-queue.mjs`, `gateway/lib/batch-flusher.mjs`, `lib/snapshot-scoring.mjs`, `lib/telemetry.mjs`, `js/niac-api.js`, `js/niac-transport.js`, `js/supabase-client.js`, `gateway/systemd/niac-gateway.service`, `gateway/docker-compose.yml`, `scripts/rehearsal-baseline.mjs`, `load/answer-spike.js`, `scripts/audit-rehearsal-isolation.mjs`.

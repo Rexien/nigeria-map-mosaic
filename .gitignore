@@ -18,6 +18,8 @@ node_modules/
 dist/
 /*.png
 .local-data/
+# Load manifests contain participant bearer credentials. Keep all raw run data private.
+artifacts/
 data/*.db
 data/*.db-wal
 data/*.db-shm
