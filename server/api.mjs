@@ -508,44 +508,33 @@ async function me(e) {
 async function answer(e) {
   const p = await participant(e);
   rateLimit(p.id,'answer', 12, 10000);
-  const s = (await db(`live_sessions?select=*&order=updated_at.desc&limit=1`))[0];
+  const body = JSON.parse(e.body || '{}');
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if(!uuid.test(body.sessionId||'') || !uuid.test(body.questionId||'') || !uuid.test(body.idempotencyKey||''))return json(422,{error:'Session, question and UUID idempotency key are required'});
+  const s = (await db(`live_sessions?id=eq.${body.sessionId}&event_id=eq.${p.event_id}&select=*`))[0];
+  if(!s || s.current_question_id!==body.questionId)return json(409,{error:'Answer does not match the active question',code:'SESSION_MISMATCH'});
   if (!s || s.state !== 'open' || !s.current_question_id) return json(409, { error: 'No question is open for answers right now' });
   if (s.deadline_at && Date.now() > new Date(s.deadline_at).getTime()) {
     await autoRevealSession(s);
     return json(409, { error: 'Answers are closed for this question' });
   }
-  const body = JSON.parse(e.body || '{}');
   const option = Number(body.optionIndex);
   if (!Number.isInteger(option) || option < 0 || option > 3) return json(422, { error: 'Choose option A, B, C or D' });
   if (p.is_spectator) {
     return json(200, { recorded: true, spectator: true, message: 'Interactive answer recorded in spectator mode.' });
   }
-  const key = `${p.id}:${s.current_question_id}`;
-  const duplicate = (await db(`gateway_answers?idempotency_key=eq.${encodeURIComponent(key)}&select=id`))[0]
-    || (await db(`participant_answers?participant_id=eq.${p.id}&question_id=eq.${s.current_question_id}&select=id`))[0];
-  if (duplicate) return json(409, { error: 'You have already submitted an answer for this question' });
-
-  const q = (await db(`quiz_questions?id=eq.${s.current_question_id}&select=duration_seconds,quiz_rounds(quiz_games(activity))`))[0];
-  const opened = s.opened_at ? new Date(s.opened_at).getTime() : Date.now();
-  const responseMs = Math.max(0, Date.now() - opened);
-  const activity = q?.quiz_rounds?.quiz_games?.activity || 'passport';
-  await db('rpc/submit_raw_quiz_answer', {
+  const result = await db('rpc/submit_raw_quiz_answer', {
     method: 'POST',
     body: JSON.stringify({
       p_session_id: s.id,
-      p_participant_id: p.id,
+      p_token_hash: hash(bearer(e)),
       p_question_id: s.current_question_id,
       p_option_index: option,
-      p_clue_number: activity === 'decode' ? (s.current_clue || 1) : null,
-      p_response_ms: responseMs,
-      p_idempotency_key: key
+      p_idempotency_key: body.idempotencyKey
     })
   });
-  await db('rpc/increment_live_response_count', {
-    method: 'POST',
-    body: JSON.stringify({ p_session_id: s.id, p_question_id: s.current_question_id })
-  });
-  return json(200, { recorded: true, message: 'Answer received — locked in.' });
+  if(!result?.accepted || !result.answerId)throw Object.assign(new Error('Answer persistence was not confirmed'),{status:503});
+  return json(200, { recorded:true,accepted:true,duplicate:result.duplicate===true,answerId:result.answerId,message:'Answer received — locked in.' });
 }
 
 async function lens(e) {
