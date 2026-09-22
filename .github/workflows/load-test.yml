@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tier:
-        description: 'Participant scale tier (capped at 100)'
+        description: 'Participant scale tier'
         required: true
         type: choice
         default: '5'
@@ -13,6 +13,10 @@ on:
           - '10'
           - '50'
           - '100'
+          - '250'
+          - '500'
+          - '750'
+          - '1000'
       rounds:
         description: 'Number of distinct quiz rounds'
         required: true
