@@ -113,6 +113,7 @@ export async function runTier(options = {}) {
       throw new Error(`Failed to open question: HTTP ${openRes.status} - ${err}`);
     }
     const openData = await openRes.json();
+    console.log(`  Admin open timing: ${openRes.headers.get('server-timing') || 'not reported'}; client total ${Date.now() - commandStartedAt}ms`);
     const openVersion = openData.session.version;
     observer.commandStarts.set(openVersion,commandStartedAt);
     if(openData.session.id!==sessionId)throw new Error('Session changed during test');

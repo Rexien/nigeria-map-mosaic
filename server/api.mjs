@@ -678,6 +678,7 @@ async function updateQuestion(e, admin) {
 
 async function adminAction(e, admin) {
   const b = JSON.parse(e.body || '{}');
+  const actionStartedAt = Date.now();
   const ev = await event();
   const openQuestionPromise = b.kind === 'open_question'
     ? db(`quiz_questions?id=eq.${b.questionId}&review_status=eq.approved&is_void=eq.false&select=*,question_options(option_index,label),quiz_rounds(day,game_id,quiz_games(activity,title))`)
@@ -686,6 +687,7 @@ async function adminAction(e, admin) {
     db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`),
     openQuestionPromise
   ]);
+  const readFinishedAt = Date.now();
   let session = sessionRows[0];
 
   if (b.kind === 'show_welcome') {
@@ -858,6 +860,7 @@ async function adminAction(e, admin) {
         version: session.version + 1
       })
     }))[0];
+    const sessionWrittenAt = Date.now();
     const decodePromise = activity === 'decode'
       ? db(`decode_state_rounds?round_id=eq.${q.round_id}&select=clues,clue_media,state_geo_id,reveal_fact`)
       : Promise.resolve(null);
@@ -874,6 +877,7 @@ async function adminAction(e, admin) {
       decodePromise,
       audit(admin, ev, 'open_question', 'live_session', session.id, session, after)
     ]);
+    const relatedWritesFinishedAt = Date.now();
     const round = q.quiz_rounds;
     const game = round?.quiz_games;
     const options = (q.question_options || []).slice().sort((a, b) => a.option_index - b.option_index);
@@ -920,6 +924,11 @@ async function adminAction(e, admin) {
       responseCount: 0,
       serverNow: new Date().toISOString()
     }, question);
+    result.actionTimings = {
+      read: readFinishedAt - actionStartedAt,
+      sessionWrite: sessionWrittenAt - readFinishedAt,
+      relatedWrites: relatedWritesFinishedAt - sessionWrittenAt
+    };
     return result;
   }
   if (b.kind === 'select_question') {
@@ -1057,11 +1066,20 @@ export async function handler(e) {
         rankingReads.clear();
         const gatewayEnvelope = res?.gatewayEnvelope;
         if (res?.gatewayEnvelope) delete res.gatewayEnvelope;
+        const broadcastStartedAt = Date.now();
         try {
           if (gatewayEnvelope) await gatewayCall('broadcast', gatewayEnvelope);
           else await pushGatewayState();
         } catch (error) {
           console.error(formatLog('error', 'gateway_broadcast_failed', { requestId, error: error.message }));
+        }
+        if (res?.actionTimings) {
+          res.headers['server-timing'] = Object.entries({
+            ...res.actionTimings,
+            broadcast: Date.now() - broadcastStartedAt,
+            total: Date.now() - startAt
+          }).map(([name, duration]) => `${name};dur=${duration}`).join(', ');
+          delete res.actionTimings;
         }
       }
 
