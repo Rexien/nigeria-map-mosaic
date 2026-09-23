@@ -61,7 +61,7 @@ jobs:
       - name: Check out reviewed load-test code
         uses: actions/checkout@v4
         with:
-          ref: 193ad61b07660c26da7ea8a0578a257334067ec0
+          ref: d7fd177a66ea2f0cca3fa2792700f538bfe0c4ec
           persist-credentials: false
 
       - name: Set up Node.js 22
