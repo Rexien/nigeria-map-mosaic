@@ -218,7 +218,10 @@ export async function runTier(options = {}) {
     const healthResponse=await fetch(`${gatewayUrl}/gateway/health`,{signal:AbortSignal.timeout(5000)});
     if(!healthResponse.ok)throw new Error('Cannot verify drained queue');
     const health=await healthResponse.json();
-    if(!durable.passed || health.queueDepth!==0 || acceptedCount!==participants.length || duplicates.length!==numDuplicates || latencies.p95>1000 || latencies.p99>1500)throw new Error(`Round ${r+1} failed acceptance/durability/latency gates; evidence saved; ladder stopped`);
+    if(!durable.passed || health.queueDepth!==0 || acceptedCount!==participants.length || duplicates.length!==numDuplicates)throw new Error(`Round ${r+1} failed acceptance/durability gates; evidence saved; ladder stopped`);
+    // Strict latency goals still fail the final report. Abort the ladder immediately only
+    // when latency is severe enough to threaten a live 20-second answer window.
+    if(latencies.p95>3000 || latencies.p99>5000 || latencies.max>8000)throw new Error(`Round ${r+1} exceeded the severe latency abort gate; evidence saved; ladder stopped`);
     console.log(`  ✓ Answer Revealed.`);
     roundReports.push({
       round: r + 1,

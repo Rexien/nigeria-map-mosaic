@@ -164,6 +164,8 @@ These are proposed event acceptance thresholds, fixed before the first measured 
 | Disk | Stop on SQLite IO errors, disk >85% used or <2 GiB free, sustained WAL growth with no recovery across idle rounds. |
 | Generator | Zero dropped iterations; p99 schedule slip <100 ms; otherwise invalidate capacity interpretation and fix runner. |
 
+The cloud runner distinguishes certification from a safe diagnostic ramp. A tier still **fails** if the answer, fanout, or score-read goals above are missed. It stops further rounds immediately for any missing/undurable answer, undrained queue, failed duplicate check, failed fanout hard gate, or severe answer latency (p95 >3 s, p99 >5 s, or max >8 s). A merely missed 1 s/1.5 s answer goal is recorded as a failed tier, but may be followed by a deliberately supervised higher-tier *capacity probe* if correctness and host health remain intact. Such a probe cannot certify event readiness or erase the lower-tier failure.
+
 On abort: stop new joins/answers, retain collectors/listeners, let existing accepted writes drain, preserve evidence. No automatic clear/restart/production failover. If sink errors persist or drain cannot complete, stop the session safely and give AG exact run IDs/logs. Never repeat a failed tier until cause is understood.
 
 ## 9. Supabase and Vercel pressure
