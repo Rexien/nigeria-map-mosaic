@@ -273,8 +273,9 @@ export async function runTier(options = {}) {
   const zeroLoss = totalFirstAttempts === expectedTotal;
   const p95WithinSla = roundReports.every(r => r.latencies.p95 <= 1000 && r.latencies.p99 <= 1500);
   const fanoutWithinSla = roundReports.every(r => r.fanout.p95Ms <= 1000 && r.fanout.p99Ms <= 2000);
+  const readsWithinSla = readPassCount === participants.length && readLatencies.p95 <= 1000 && readLatencies.p99 <= 2000;
 
-  const passed = zeroLoss && p95WithinSla && fanoutWithinSla && readPassCount===participants.length && roundReports.every(r=>r.durable.passed);
+  const passed = zeroLoss && p95WithinSla && fanoutWithinSla && readsWithinSla && roundReports.every(r=>r.durable.passed);
 
   const report = {
     runId,
@@ -286,6 +287,7 @@ export async function runTier(options = {}) {
     zeroLoss,
     p95WithinSla,
     fanoutWithinSla,
+    readsWithinSla,
     fanoutAbortMs,
     readPassCount,
     readLatencies,
@@ -303,6 +305,7 @@ export async function runTier(options = {}) {
   console.log(`  - Zero Loss Gate:  ${zeroLoss ? 'PASS' : 'FAIL'} (${totalFirstAttempts}/${expectedTotal})`);
   console.log(`  - p95 Latency SLA: ${p95WithinSla ? 'PASS' : 'FAIL'}`);
   console.log(`  - Fanout SLA:      ${fanoutWithinSla ? 'PASS' : 'FAIL'}`);
+  console.log(`  - Score-read SLA:  ${readsWithinSla ? 'PASS' : 'FAIL'}`);
   console.log(`  - Report File:     ${reportPath}`);
   console.log(`=============================================================\n`);
 

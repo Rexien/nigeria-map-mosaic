@@ -495,8 +495,7 @@ async function bootstrap() {
 
 async function me(e) {
   const p = await participant(e);
-  const ev = await event();
-  const session = (await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`))[0];
+  const session = (await db(`live_sessions?event_id=eq.${p.event_id}&select=*&order=updated_at.desc&limit=1`))[0];
   const version = session?.version || 1;
   const snapshot = session ? (await db(`participant_score_snapshots?session_id=eq.${session.id}&participant_id=eq.${p.id}&snapshot_version=eq.${version}&select=rank,scores,stamps`))[0] : null;
   const defaults = { day1: 0, day2: 0, combined: 0, decode: 0 };
