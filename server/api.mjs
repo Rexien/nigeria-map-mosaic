@@ -861,23 +861,6 @@ async function adminAction(e, admin) {
       })
     }))[0];
     const sessionWrittenAt = Date.now();
-    const decodePromise = activity === 'decode'
-      ? db(`decode_state_rounds?round_id=eq.${q.round_id}&select=clues,clue_media,state_geo_id,reveal_fact`)
-      : Promise.resolve(null);
-    const [, , decodeRows] = await Promise.all([
-      db('live_question_state', {
-        method: 'POST',
-        prefer: 'resolution=merge-duplicates,return=representation',
-        body: JSON.stringify({ session_id: session.id, question_id: q.id, response_count: 0 })
-      }),
-      db(`event_settings?event_id=eq.${ev.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ active_activity: activity, screen_mode: 'activity', updated_at: now.toISOString() })
-      }),
-      decodePromise,
-      audit(admin, ev, 'open_question', 'live_session', session.id, session, after)
-    ]);
-    const relatedWritesFinishedAt = Date.now();
     const round = q.quiz_rounds;
     const game = round?.quiz_games;
     const options = (q.question_options || []).slice().sort((a, b) => a.option_index - b.option_index);
@@ -896,7 +879,10 @@ async function adminAction(e, admin) {
       fallback: q.image_fallback || null,
       options: options.map(option => option.label)
     };
+
+    let decodeRows = null;
     if (activity === 'decode') {
+      decodeRows = await db(`decode_state_rounds?round_id=eq.${q.round_id}&select=clues,clue_media,state_geo_id,reveal_fact`);
       const decode = decodeRows?.[0];
       question.clueNumber = clueNum;
       question.clue = decode?.clues?.[clueNum - 1] || null;
@@ -909,8 +895,8 @@ async function adminAction(e, admin) {
       question.cluesSoFar = (decode?.clues || []).slice(0, clueNum);
       question.clueMediaSoFar = (decode?.clue_media || []).slice(0, clueNum);
     }
-    const result = json(200, { session: after });
-    result.gatewayEnvelope = createStateEnvelope({
+
+    const gatewayEnvelope = createStateEnvelope({
       event: ev,
       eventId: ev.id,
       sessionId: after.id,
@@ -924,10 +910,32 @@ async function adminAction(e, admin) {
       responseCount: 0,
       serverNow: new Date().toISOString()
     }, question);
+
+    const broadcastStartedAt = Date.now();
+    const broadcastPromise = gatewayBase() ? gatewayCall('broadcast', gatewayEnvelope) : Promise.resolve(null);
+
+    await Promise.all([
+      db('live_question_state', {
+        method: 'POST',
+        prefer: 'resolution=merge-duplicates,return=representation',
+        body: JSON.stringify({ session_id: session.id, question_id: q.id, response_count: 0 })
+      }),
+      db(`event_settings?event_id=eq.${ev.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active_activity: activity, screen_mode: 'activity', updated_at: now.toISOString() })
+      }),
+      audit(admin, ev, 'open_question', 'live_session', session.id, session, after),
+      broadcastPromise
+    ]);
+    const relatedWritesFinishedAt = Date.now();
+
+    const result = json(200, { session: after });
+    result.gatewayBroadcasted = true;
     result.actionTimings = {
       read: readFinishedAt - actionStartedAt,
       sessionWrite: sessionWrittenAt - readFinishedAt,
-      relatedWrites: relatedWritesFinishedAt - sessionWrittenAt
+      relatedWrites: relatedWritesFinishedAt - sessionWrittenAt,
+      broadcast: Date.now() - broadcastStartedAt
     };
     return result;
   }
@@ -1066,19 +1074,23 @@ export async function handler(e) {
         rankingReads.clear();
         const gatewayEnvelope = res?.gatewayEnvelope;
         if (res?.gatewayEnvelope) delete res.gatewayEnvelope;
+        const alreadyBroadcast = Boolean(res?.gatewayBroadcasted);
+        if (res?.gatewayBroadcasted) delete res.gatewayBroadcasted;
         const broadcastStartedAt = Date.now();
         try {
-          if (gatewayEnvelope) await gatewayCall('broadcast', gatewayEnvelope);
-          else await pushGatewayState();
+          if (!alreadyBroadcast) {
+            if (gatewayEnvelope) await gatewayCall('broadcast', gatewayEnvelope);
+            else await pushGatewayState();
+          }
         } catch (error) {
           console.error(formatLog('error', 'gateway_broadcast_failed', { requestId, error: error.message }));
         }
         if (res?.actionTimings) {
-          res.headers['server-timing'] = Object.entries({
-            ...res.actionTimings,
-            broadcast: Date.now() - broadcastStartedAt,
-            total: Date.now() - startAt
-          }).map(([name, duration]) => `${name};dur=${duration}`).join(', ');
+          const timings = { ...res.actionTimings };
+          if (!timings.broadcast) timings.broadcast = Date.now() - broadcastStartedAt;
+          timings.total = Date.now() - startAt;
+          res.headers['server-timing'] = Object.entries(timings)
+            .map(([name, duration]) => `${name};dur=${duration}`).join(', ');
           delete res.actionTimings;
         }
       }
