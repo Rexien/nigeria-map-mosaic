@@ -494,10 +494,11 @@ async function bootstrap() {
 }
 
 async function me(e) {
-  const p = await participant(e);
-  const session = (await db(`live_sessions?event_id=eq.${p.event_id}&select=*&order=updated_at.desc&limit=1`))[0];
-  const version = session?.version || 1;
-  const snapshot = session ? (await db(`participant_score_snapshots?session_id=eq.${session.id}&participant_id=eq.${p.id}&snapshot_version=eq.${version}&select=rank,scores,stamps`))[0] : null;
+  const raw = bearer(e);
+  if (!raw) throw Object.assign(new Error('Join the event first'), { status: 401 });
+  const p = (await db(`participants?token_hash=eq.${hash(raw)}&select=id,alias,registered_at,is_spectator,participant_score_snapshots(rank,scores,stamps)&participant_score_snapshots.order=created_at.desc&participant_score_snapshots.limit=1&limit=1`))[0];
+  if (!p) throw Object.assign(new Error('Participant session is not valid'), { status: 401 });
+  const snapshot = p.participant_score_snapshots?.[0] || null;
   const defaults = { day1: 0, day2: 0, combined: 0, decode: 0 };
   return json(200, {
     participant: { id: p.id, alias: p.alias, registeredAt: p.registered_at, isSpectator: Boolean(p.is_spectator) },
@@ -583,8 +584,7 @@ async function leaderboard(e) {
   const activity = clean(e.queryStringParameters?.activity || url.searchParams.get('activity') || 'passport');
   const ev = await event();
   const session = (await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`))[0];
-  const version = session?.version || 1;
-  const snapshot = session ? (await db(`leaderboard_snapshots?session_id=eq.${session.id}&activity=eq.${activity}&snapshot_version=eq.${version}&select=leaders`))[0] : null;
+  const snapshot = session ? (await db(`leaderboard_snapshots?session_id=eq.${session.id}&activity=eq.${activity}&select=leaders&order=snapshot_version.desc&limit=1`))[0] : null;
   return json(200, { activity, leaders: snapshot?.leaders || [] });
 }
 
