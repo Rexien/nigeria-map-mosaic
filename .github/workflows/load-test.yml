@@ -35,16 +35,14 @@ on:
         required: true
         type: number
         default: 10
-      target_url:
-        description: 'Target Authority URL (must be Preview; Production is blocked)'
-        required: true
-        type: string
-        default: 'https://niaclive-git-codex-load-reliability-zamijudes-projects.vercel.app'
-      target_gateway_url:
-        description: 'Target Gateway URL'
-        required: true
-        type: string
-        default: 'https://92.4.146.91.sslip.io'
+
+env:
+  NIAC_BASE_URL: https://niaclive-git-codex-load-reliability-zamijudes-projects.vercel.app
+  NIAC_GATEWAY_URL: https://92.4.146.91.sslip.io
+  TEST_TIER: ${{ inputs.tier }}
+  TEST_ROUNDS: ${{ inputs.rounds }}
+  TEST_BURST_SECONDS: ${{ inputs.burst_seconds }}
+  TEST_DUPLICATE_PERCENT: ${{ inputs.duplicate_percent }}
 
 permissions:
   contents: read
@@ -57,41 +55,32 @@ jobs:
   load-test:
     name: Cloud Load Runner (${{ inputs.tier }} Players)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
-      - name: Check out repository at codex/load-reliability
+      - name: Check out reviewed load-test code
         uses: actions/checkout@v4
         with:
-          ref: codex/load-reliability
+          ref: 987f38d97c4978f171c3a88fa66cd0a4334b7844
+          persist-credentials: false
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Production Safety Gate & Target Validation
+      - name: Validate the fixed Preview target and test size
         run: |
-          TARGET_URL="${{ inputs.target_url }}"
-          
-          # Strictly block Production targets
-          if [[ "$TARGET_URL" == *"niaclive.vercel.app"* ]] && [[ "$TARGET_URL" != *"git-"* ]]; then
-            echo "::error::Production target ($TARGET_URL) is explicitly blocked on this load runner."
-            exit 1
-          fi
-          
-          # Verify target is HTTPS
-          if [[ "$TARGET_URL" != "https://"* ]]; then
-            echo "::error::HTTPS target required. Got: $TARGET_URL"
-            exit 1
-          fi
-          
-          echo "Target validated as non-production Preview: $TARGET_URL"
+          test "$NIAC_BASE_URL" = 'https://niaclive-git-codex-load-reliability-zamijudes-projects.vercel.app'
+          test "$NIAC_GATEWAY_URL" = 'https://92.4.146.91.sslip.io'
+          case "$TEST_TIER" in 5|10|50|100|250|500|750|1000) ;; *) exit 1;; esac
+          case "$TEST_ROUNDS" in 1|3) ;; *) exit 1;; esac
+          [[ "$TEST_BURST_SECONDS" =~ ^[1-9][0-9]?$ ]] || exit 1
+          [[ "$TEST_DUPLICATE_PERCENT" =~ ^(0|[1-9][0-9]?|100)$ ]] || exit 1
+          echo "Fixed Preview target and tier $TEST_TIER verified"
 
       - name: Read-Only Preflight Checks
         env:
-          NIAC_BASE_URL: ${{ inputs.target_url }}
-          NIAC_GATEWAY_URL: ${{ inputs.target_gateway_url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           node -e "
@@ -112,23 +101,19 @@ jobs:
       - name: Prepare Rehearsal Participants
         id: prepare
         env:
-          NIAC_BASE_URL: ${{ inputs.target_url }}
-          NIAC_GATEWAY_URL: ${{ inputs.target_gateway_url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
-          RUN_ID="cloud-${{ inputs.tier }}p-r${{ github.run_id }}"
+          RUN_ID="cloud-${TEST_TIER}p-r${GITHUB_RUN_ID}"
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
           echo "Run ID: $RUN_ID"
           
           node scripts/load/prepare.mjs \
-            --participants ${{ inputs.tier }} \
+            --participants "$TEST_TIER" \
             --join-rate 10 \
             --run-id "$RUN_ID"
 
       - name: Run Calibrated Load Tier
         env:
-          NIAC_BASE_URL: ${{ inputs.target_url }}
-          NIAC_GATEWAY_URL: ${{ inputs.target_gateway_url }}
           NIAC_RUN_ID: ${{ env.RUN_ID }}
           ADMIN_PIN: ${{ secrets.ADMIN_PIN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -136,22 +121,23 @@ jobs:
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           node scripts/load/run-tier.mjs \
-            --participants ${{ inputs.tier }} \
-            --rounds ${{ inputs.rounds }} \
-            --burst-seconds ${{ inputs.burst_seconds }} \
-            --duplicate-percent ${{ inputs.duplicate_percent }} \
+            --participants "$TEST_TIER" \
+            --rounds "$TEST_ROUNDS" \
+            --burst-seconds "$TEST_BURST_SECONDS" \
+            --duplicate-percent "$TEST_DUPLICATE_PERCENT" \
+            --fanout-abort-ms 3000 \
             --run-id "$RUN_ID"
 
       - name: Verify Rehearsal Isolation & Leaderboard Integrity
+        if: ${{ always() && steps.prepare.outcome == 'success' }}
         env:
-          NIAC_BASE_URL: ${{ inputs.target_url }}
           NIAC_RUN_ID: ${{ env.RUN_ID }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           node scripts/load/verify.mjs --run-id "$RUN_ID"
 
       - name: Strip Credential Manifests & Tokens Before Archiving
-        if: always()
+        if: ${{ always() && env.RUN_ID != '' }}
         run: |
           EVIDENCE_DIR="artifacts/load/${{ env.RUN_ID }}"
           if [ -d "$EVIDENCE_DIR" ]; then
@@ -160,7 +146,7 @@ jobs:
           fi
 
       - name: Upload Test Evidence Artifact
-        if: always()
+        if: ${{ always() && env.RUN_ID != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: load-evidence-${{ inputs.tier }}p-run-${{ github.run_id }}
