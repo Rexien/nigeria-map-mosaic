@@ -47,6 +47,7 @@ export function broadcastState(envelope) {
       client.write(payload);
     } catch {
       sseClients.delete(client);
+      client.destroy?.();
     }
   }
 
@@ -336,12 +337,20 @@ export function createGatewayServer(customQueue = null, options = {}) {
       authoritySyncObserver?.clientActivity?.();
       const heartbeat=setInterval(()=>{try{res.write(': keepalive\n\n')}catch{clearInterval(heartbeat)}},15000);
       heartbeat.unref?.();
-      req.on('close', () => {
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
         clearInterval(heartbeat);
         sseClients.delete(res);
         globalMetrics.setActiveConnections(sseClients.size + wsClients.size);
         authoritySyncObserver?.observe(cachedEnvelope);
-      });
+      };
+      // The request can finish while an SSE response is still open. Its `close`
+      // event is not a reliable signal that the downstream listener disconnected.
+      res.once('close', cleanup);
+      res.once('error', cleanup);
+      req.once('aborted', cleanup);
       return;
     }
 
