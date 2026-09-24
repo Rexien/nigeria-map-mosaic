@@ -289,6 +289,10 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
   await withAdminEnv(async () => {
     const token = createAdminSession();
     const originalFetch = global.fetch;
+    let trackDecodeOpenAction = false;
+    let decodeReadFinishedAt = 0;
+    let openSessionPatch = null;
+    const decodeOpenTimeline = [];
 
     const mockSettings = {
       event_id: 'ev-1',
@@ -393,7 +397,12 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
 
       if (urlStr.includes('/live_sessions')) {
         if (options.method === 'PATCH') {
-          Object.assign(mockSession, JSON.parse(options.body));
+          const patch = JSON.parse(options.body);
+          if (trackDecodeOpenAction && patch.state === 'open') {
+            decodeOpenTimeline.push('open-session');
+            openSessionPatch = patch;
+          }
+          Object.assign(mockSession, patch);
           return new Response(JSON.stringify([mockSession]), { status: 200 });
         }
         return new Response(JSON.stringify([mockSession]), { status: 200 });
@@ -439,6 +448,11 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
       }
 
       if (urlStr.includes('/decode_state_rounds')) {
+        if (trackDecodeOpenAction) {
+          await new Promise(resolve => setTimeout(resolve, 120));
+          decodeReadFinishedAt = Date.now();
+          decodeOpenTimeline.push('decode-data-ready');
+        }
         return new Response(JSON.stringify([{
           clues: [
             'Known as the Home of Peace and Tourism.',
@@ -452,6 +466,7 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
       }
 
       if (urlStr.includes('/live_question_state')) {
+        if (trackDecodeOpenAction && options.method === 'POST') decodeOpenTimeline.push('response-counter-ready');
         return new Response(JSON.stringify([{ response_count: 0 }]), { status: 200 });
       }
 
@@ -467,14 +482,24 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
     };
 
     const action = async (body) => {
-      const res = await authorityHandler({
-        httpMethod: 'POST',
-        path: '/api/admin/action',
-        headers: { authorization: `Bearer ${token}` },
-        body: JSON.stringify(body)
-      });
-      assert.equal(res.statusCode, 200, `Action failed for ${JSON.stringify(body)}: ${res.body}`);
-      return JSON.parse(res.body);
+      trackDecodeOpenAction = body.kind === 'open_question' && body.questionId === 'q-d1';
+      if (trackDecodeOpenAction) {
+        decodeOpenTimeline.length = 0;
+        decodeReadFinishedAt = 0;
+        openSessionPatch = null;
+      }
+      try {
+        const res = await authorityHandler({
+          httpMethod: 'POST',
+          path: '/api/admin/action',
+          headers: { authorization: `Bearer ${token}` },
+          body: JSON.stringify(body)
+        });
+        assert.equal(res.statusCode, 200, `Action failed for ${JSON.stringify(body)}: ${res.body}`);
+        return JSON.parse(res.body);
+      } finally {
+        trackDecodeOpenAction = false;
+      }
     };
 
     const getState = async () => {
@@ -558,6 +583,10 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
 
       // 11. Open voting (30s)
       await action({ kind: 'open_question', questionId: 'q-d1' });
+      assert.deepEqual(decodeOpenTimeline, ['decode-data-ready', 'response-counter-ready', 'open-session']);
+      assert.ok(Date.parse(openSessionPatch.opened_at) >= decodeReadFinishedAt,
+        'Decode clue preparation must finish before the answer clock starts');
+      assert.equal(Date.parse(openSessionPatch.deadline_at) - Date.parse(openSessionPatch.opened_at), 30_000);
       state = await getState();
       assert.equal(state.state, 'open');
       assert.equal(state.currentClue, 3);

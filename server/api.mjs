@@ -855,8 +855,16 @@ async function adminAction(e, admin) {
     if (!q) return json(422, { error: 'Only approved, non-void questions can be opened.' });
     if (session.state === 'open') return json(409, { error: 'A question is already open.' });
     if (session.state === 'ended') return json(409, { error: 'Return to the welcome screen before opening a question.' });
-    const now = new Date(), activity = q.quiz_rounds?.quiz_games?.activity || 'passport';
+    const activity = q.quiz_rounds?.quiz_games?.activity || 'passport';
     const clueNum = activity === 'decode' ? (session.current_question_id === q.id && session.current_clue ? session.current_clue : 3) : 1;
+    // Prepare server-side answer state before the timed question starts.
+    await db('live_question_state', {
+      method: 'POST',
+      prefer: 'resolution=merge-duplicates,return=representation',
+      body: JSON.stringify({ session_id: session.id, question_id: q.id, response_count: 0 })
+    });
+
+    const now = new Date();
     const after = (await db(`live_sessions?id=eq.${session.id}`, {
       method: 'PATCH',
       body: JSON.stringify({
@@ -870,11 +878,6 @@ async function adminAction(e, admin) {
         version: session.version + 1
       })
     }))[0];
-    await db('live_question_state', {
-      method: 'POST',
-      prefer: 'resolution=merge-duplicates,return=representation',
-      body: JSON.stringify({ session_id: session.id, question_id: q.id, response_count: 0 })
-    });
     await db(`event_settings?event_id=eq.${ev.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ active_activity: activity, screen_mode: 'activity', updated_at: now.toISOString() })
