@@ -347,6 +347,16 @@ async function join(e) {
     return json(422, { error: 'Use a 2–30 character alias containing a letter or number.' });
   }
   const ev = await event();
+  const bearer = (e.headers?.authorization || e.headers?.Authorization || '').replace(/^Bearer\s+/i, '').trim();
+  const existing = await db(`participants?event_id=eq.${ev.id}&alias=ilike.${encodeURIComponent(alias)}&select=id,alias,token_hash,is_spectator,is_rehearsal`);
+  const matched = (existing || []).find(p => p.alias.trim().toLowerCase() === alias.toLowerCase());
+  if (matched) {
+    if (bearer && hash(bearer) === matched.token_hash) {
+      const credential = signParticipantCredential({ participantId: matched.id, eventId: ev.id, isSpectator: matched.is_spectator, isRehearsal: matched.is_rehearsal });
+      return json(200, { participant: { id: matched.id, alias: matched.alias, isSpectator: matched.is_spectator, isRehearsal: matched.is_rehearsal }, token: bearer, credential });
+    }
+    return json(409, { error: `That name is already taken. Try adding an initial (e.g. ${alias} O) or a nickname.` });
+  }
   const rawToken = token(32);
   const recovery = code();
   const settings = (await db(`event_settings?event_id=eq.${ev.id}&select=*`))[0];

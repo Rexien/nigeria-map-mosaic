@@ -346,3 +346,78 @@ test('Void exclusions and spectator exclusions preserved in cumulative scoring',
   assert.equal(leaders[0].alias, 'PlayerActive');
   assert.ok(!leaders.some(l => l.alias === 'PlayerSpectator' || l.alias === 'PlayerRehearsal'));
 });
+
+test('Participant join: rejects duplicate alias case-insensitively and allows same-device recognition', async () => {
+  await withAdminEnv(async () => {
+    const originalFetch = global.fetch;
+    const existingToken = 'my-existing-secret-token';
+    const crypto = await import('node:crypto');
+    const tokenHash = crypto.createHash('sha256').update(`${process.env.PARTICIPANT_TOKEN_PEPPER || ''}:${existingToken}`).digest('hex');
+
+    global.fetch = async (url, options = {}) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/events')) {
+        return new Response(JSON.stringify([{ id: 'test-event-id' }]), { status: 200 });
+      }
+      if (urlStr.includes('/event_settings')) {
+        return new Response(JSON.stringify([{ event_id: 'test-event-id' }]), { status: 200 });
+      }
+      if (urlStr.includes('/participants?') && urlStr.includes('alias=ilike.')) {
+        if (urlStr.includes('Ada') || urlStr.includes('ada')) {
+          return new Response(JSON.stringify([{
+            id: 'p-ada-1',
+            alias: 'Ada',
+            token_hash: tokenHash,
+            is_spectator: false,
+            is_rehearsal: false
+          }]), { status: 200 });
+        }
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (urlStr.includes('/participants') && options.method === 'POST') {
+        const body = JSON.parse(options.body);
+        return new Response(JSON.stringify([{ id: 'p-new-1', ...body }]), { status: 201 });
+      }
+      return new Response(JSON.stringify([]), { status: 200 });
+    };
+
+    try {
+      // 1. Attempt to join with taken alias without bearer token -> 409
+      const dupRes = await authorityHandler({
+        httpMethod: 'POST',
+        path: '/api/participants',
+        headers: {},
+        body: JSON.stringify({ alias: 'ada' })
+      });
+      assert.equal(dupRes.statusCode, 409);
+      const dupBody = JSON.parse(dupRes.body);
+      assert.match(dupBody.error, /already taken/i);
+
+      // 2. Same device re-submitting with matching bearer token -> 200 OK
+      const sameDeviceRes = await authorityHandler({
+        httpMethod: 'POST',
+        path: '/api/participants',
+        headers: { authorization: `Bearer ${existingToken}` },
+        body: JSON.stringify({ alias: 'Ada' })
+      });
+      assert.equal(sameDeviceRes.statusCode, 200);
+      const sameDeviceBody = JSON.parse(sameDeviceRes.body);
+      assert.equal(sameDeviceBody.participant.id, 'p-ada-1');
+      assert.equal(sameDeviceBody.participant.alias, 'Ada');
+
+      // 3. New unique alias -> 200 OK
+      const newRes = await authorityHandler({
+        httpMethod: 'POST',
+        path: '/api/participants',
+        headers: {},
+        body: JSON.stringify({ alias: 'BrandNewPlayer' })
+      });
+      assert.equal(newRes.statusCode, 200);
+      const newBody = JSON.parse(newRes.body);
+      assert.equal(newBody.participant.alias, 'BrandNewPlayer');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
+

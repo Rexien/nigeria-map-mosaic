@@ -4,7 +4,7 @@
   function getToken(){return localStorage.getItem(TOKEN_KEY)}
   function getCredential(){return localStorage.getItem(CREDENTIAL_KEY)||getToken()}
   function getProfile(){try{return JSON.parse(localStorage.getItem(PROFILE_KEY)||'null')}catch{return null}}
-  function saveSession(data){localStorage.setItem(TOKEN_KEY,data.token);if(data.credential)localStorage.setItem(CREDENTIAL_KEY,data.credential);localStorage.setItem(PROFILE_KEY,JSON.stringify(data.participant));}
+  function saveSession(data){localStorage.setItem(TOKEN_KEY,data.token);if(data.credential)localStorage.setItem(CREDENTIAL_KEY,data.credential);if(data.recoveryCode)localStorage.setItem('niac_participant_recovery_code',data.recoveryCode);localStorage.setItem(PROFILE_KEY,JSON.stringify(data.participant));}
   function apiErrorMessage(data,fallback='Request failed'){
     const values=[data?.error,data?.message,data?.error_description,data?.detail,data?.details];
     for(const value of values){
