@@ -22,22 +22,22 @@
         {
           "src": "/assets/decode/01.jpg",
           "timing": "question",
-          "alt": "Traditional indigo resist-dyed patterned fabric hung to dry",
-          "caption": "Traditional Adire textile craft in Abeokuta, Ogun State. Photo: Olaniyan Olushola (CC BY-SA 4.0)",
-          "author": "Olaniyan Olushola",
+          "alt": "Rows of folded indigo and patterned Adire fabrics",
+          "caption": "Adire fabrics in Abeokuta, Ogun State. Photo: Omoeko Media (CC BY-SA 4.0)",
+          "author": "Omoeko Media",
           "license": "CC BY-SA 4.0",
           "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
-          "fallback": "Traditional indigo-dyed adire cloth with intricate resist patterns."
+          "fallback": "Folded indigo and patterned Adire fabrics made in Abeokuta."
         },
         {
           "src": "/assets/decode/02.jpg",
           "timing": "question",
-          "alt": "Procession of traditional horse riders in ceremonial attire",
-          "caption": "Ojude Oba festival in Ijebu Ode, Ogun State. Photo: MediaMOF (CC BY-SA 4.0)",
-          "author": "MediaMOF",
+          "alt": "Ojude Oba horse-riding parade in traditional regalia",
+          "caption": "Horse riding at the Ojude Oba Festival, Ijebu Ode. Photo: Smilesnmore Digital Photography (CC BY-SA 4.0)",
+          "author": "Smilesnmore Digital Photography",
           "license": "CC BY-SA 4.0",
           "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
-          "fallback": "Parade of horse riders and traditional age grades at the annual cultural festival."
+          "fallback": "Horse riders in ceremonial dress at the annual Ojude Oba festival."
         },
         {
           "src": "/assets/decode/03.jpg",
@@ -130,12 +130,12 @@
         {
           "src": "/assets/decode/07.jpg",
           "timing": "question",
-          "alt": "Large concrete hydroelectric dam and spillway across a river",
-          "caption": "Kainji Dam, Niger State. Photo: Arcgwandu (CC BY-SA 4.0)",
-          "author": "Arcgwandu",
+          "alt": "Water flowing through the gates of the Kainji Dam spillway",
+          "caption": "Kainji Dam spillway, Niger State. Photo: Aart Rietveld, African Studies Centre Leiden (CC BY-SA 4.0)",
+          "author": "Aart Rietveld; African Studies Centre Leiden",
           "license": "CC BY-SA 4.0",
           "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
-          "fallback": "Major hydroelectric power station and dam across the Niger River."
+          "fallback": "Water discharged through the Kainji Dam spillway gates."
         },
         {
           "src": "/assets/decode/08.jpg",
@@ -204,12 +204,12 @@
         {
           "src": "/assets/decode/12.jpg",
           "timing": "question",
-          "alt": "Long steel truss bridge spanning across a wide river",
-          "caption": "River Niger Bridge into Onitsha, Anambra State. Photo: Shiraz Chakera (CC BY-SA 2.0)",
-          "author": "Shiraz Chakera",
-          "license": "CC BY-SA 2.0",
-          "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0",
-          "fallback": "Steel truss bridge spanning the River Niger toward the commercial hub of Onitsha."
+          "alt": "The River Niger Bridge at Onitsha viewed along its steel trusses",
+          "caption": "Head Bridge at Onitsha, Anambra State. Photo: MediaMOF (CC BY-SA 4.0)",
+          "author": "MediaMOF",
+          "license": "CC BY-SA 4.0",
+          "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+          "fallback": "Steel truss of the River Niger Bridge connecting Onitsha and Asaba."
         }
       ],
       "revealFact": "The Igbo-Ukwu bronzes date to the 9th century AD, centuries before European contact, demonstrating indigenous West African metallurgical mastery.",
@@ -248,12 +248,12 @@
         {
           "src": "/assets/decode/14.jpg",
           "timing": "question",
-          "alt": "Verdant highland plateau with winding mountain slopes",
-          "caption": "Obudu mountain plateau, Cross River State. Photo: Bassnificient (CC BY-SA 4.0)",
-          "author": "Bassnificient",
+          "alt": "Layered green mountain ridges across the Obudu Plateau",
+          "caption": "Mountain ridges on the Obudu Plateau, Cross River State. Photo: Dotun55 (CC BY-SA 4.0)",
+          "author": "Dotun55",
           "license": "CC BY-SA 4.0",
           "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0",
-          "fallback": "Rolling green mountain peaks and valleys on the high plateau."
+          "fallback": "Layered forested ridges viewed from the Obudu Plateau."
         },
         {
           "src": "/assets/decode/15.jpg",

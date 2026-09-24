@@ -347,6 +347,16 @@ async function join(e) {
     return json(422, { error: 'Use a 2–30 character alias containing a letter or number.' });
   }
   const ev = await event();
+  const bearer = (e.headers?.authorization || e.headers?.Authorization || '').replace(/^Bearer\s+/i, '').trim();
+  const existing = await db(`participants?event_id=eq.${ev.id}&alias=ilike.${encodeURIComponent(alias)}&select=id,alias,token_hash,is_spectator,is_rehearsal`);
+  const matched = (existing || []).find(p => p.alias.trim().toLowerCase() === alias.toLowerCase());
+  if (matched) {
+    if (bearer && hash(bearer) === matched.token_hash) {
+      const credential = signParticipantCredential({ participantId: matched.id, eventId: ev.id, isSpectator: matched.is_spectator, isRehearsal: matched.is_rehearsal });
+      return json(200, { participant: { id: matched.id, alias: matched.alias, isSpectator: matched.is_spectator, isRehearsal: matched.is_rehearsal }, token: bearer, credential });
+    }
+    return json(409, { error: `That name is already taken. Try adding an initial (e.g. ${alias} O) or a nickname.` });
+  }
   const rawToken = token(32);
   const recovery = code();
   const settings = (await db(`event_settings?event_id=eq.${ev.id}&select=*`))[0];
@@ -499,7 +509,7 @@ async function me(e) {
   const p = (await db(`participants?token_hash=eq.${hash(raw)}&select=id,alias,registered_at,is_spectator,participant_score_snapshots(rank,scores,stamps)&participant_score_snapshots.order=created_at.desc&participant_score_snapshots.limit=1&limit=1`))[0];
   if (!p) throw Object.assign(new Error('Participant session is not valid'), { status: 401 });
   const snapshot = p.participant_score_snapshots?.[0] || null;
-  const defaults = { day1: 0, day2: 0, combined: 0, decode: 0 };
+  const defaults = { day1: 0, day2: 0, combined: 0, passport: 0, decode: 0, total: 0 };
   return json(200, {
     participant: { id: p.id, alias: p.alias, registeredAt: p.registered_at, isSpectator: Boolean(p.is_spectator) },
     scores: snapshot?.scores || defaults,
@@ -554,11 +564,11 @@ async function lens(e) {
       participant_id: p.id,
       phrase: text,
       normalized_phrase: text.toLowerCase(),
-      status: 'approved'
+      status: 'pending'
     })
   });
   publicReads.clear();
-  return json(200, { submitted: true, message: 'Thank you. Your response has been added to Nigeria Through Your Lens.' });
+  return json(200, { submitted: true, message: 'Thank you. Your response has been submitted for review.' });
 }
 
 async function approvedLens() {
@@ -845,22 +855,8 @@ async function adminAction(e, admin) {
     if (!q) return json(422, { error: 'Only approved, non-void questions can be opened.' });
     if (session.state === 'open') return json(409, { error: 'A question is already open.' });
     if (session.state === 'ended') return json(409, { error: 'Return to the welcome screen before opening a question.' });
-    const now = new Date(), activity = q.quiz_rounds?.quiz_games?.activity || 'passport';
+    const activity = q.quiz_rounds?.quiz_games?.activity || 'passport';
     const clueNum = activity === 'decode' ? (session.current_question_id === q.id && session.current_clue ? session.current_clue : 3) : 1;
-    const after = (await db(`live_sessions?id=eq.${session.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        current_question_id: q.id,
-        current_round_id: q.round_id,
-        current_clue: clueNum,
-        state: 'open',
-        opened_at: now.toISOString(),
-        deadline_at: new Date(now.getTime() + (q.duration_seconds || 20) * 1000).toISOString(),
-        updated_at: now.toISOString(),
-        version: session.version + 1
-      })
-    }))[0];
-    const sessionWrittenAt = Date.now();
     const round = q.quiz_rounds;
     const game = round?.quiz_games;
     const options = (q.question_options || []).slice().sort((a, b) => a.option_index - b.option_index);
@@ -896,6 +892,30 @@ async function adminAction(e, admin) {
       question.clueMediaSoFar = (decode?.clue_media || []).slice(0, clueNum);
     }
 
+    // Finish question reads and initialize its response counter before starting the answer clock.
+    // The opening timestamp is written only after this work is complete.
+    await db('live_question_state', {
+      method: 'POST',
+      prefer: 'resolution=merge-duplicates,return=representation',
+      body: JSON.stringify({ session_id: session.id, question_id: q.id, response_count: 0 })
+    });
+
+    const now = new Date();
+    const after = (await db(`live_sessions?id=eq.${session.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        current_question_id: q.id,
+        current_round_id: q.round_id,
+        current_clue: clueNum,
+        state: 'open',
+        opened_at: now.toISOString(),
+        deadline_at: new Date(now.getTime() + (q.duration_seconds || 20) * 1000).toISOString(),
+        updated_at: now.toISOString(),
+        version: session.version + 1
+      })
+    }))[0];
+    const sessionWrittenAt = Date.now();
+
     const gatewayEnvelope = createStateEnvelope({
       event: ev,
       eventId: ev.id,
@@ -915,11 +935,6 @@ async function adminAction(e, admin) {
     const broadcastPromise = gatewayBase() ? gatewayCall('broadcast', gatewayEnvelope) : Promise.resolve(null);
 
     await Promise.all([
-      db('live_question_state', {
-        method: 'POST',
-        prefer: 'resolution=merge-duplicates,return=representation',
-        body: JSON.stringify({ session_id: session.id, question_id: q.id, response_count: 0 })
-      }),
       db(`event_settings?event_id=eq.${ev.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ active_activity: activity, screen_mode: 'activity', updated_at: now.toISOString() })
@@ -927,14 +942,13 @@ async function adminAction(e, admin) {
       audit(admin, ev, 'open_question', 'live_session', session.id, session, after),
       broadcastPromise
     ]);
-    const relatedWritesFinishedAt = Date.now();
 
     const result = json(200, { session: after });
     result.gatewayBroadcasted = true;
     result.actionTimings = {
       read: readFinishedAt - actionStartedAt,
-      sessionWrite: sessionWrittenAt - readFinishedAt,
-      relatedWrites: relatedWritesFinishedAt - sessionWrittenAt,
+      prepare: now.getTime() - readFinishedAt,
+      sessionWrite: sessionWrittenAt - now.getTime(),
       broadcast: Date.now() - broadcastStartedAt
     };
     return result;
