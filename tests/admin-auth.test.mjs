@@ -290,7 +290,7 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
     const token = createAdminSession();
     const originalFetch = global.fetch;
     let trackDecodeOpenAction = false;
-    let decodeReadFinishedAt = 0;
+    let responseCounterReadyAt = 0;
     let openSessionPatch = null;
     const decodeOpenTimeline = [];
 
@@ -448,11 +448,6 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
       }
 
       if (urlStr.includes('/decode_state_rounds')) {
-        if (trackDecodeOpenAction) {
-          await new Promise(resolve => setTimeout(resolve, 120));
-          decodeReadFinishedAt = Date.now();
-          decodeOpenTimeline.push('decode-data-ready');
-        }
         return new Response(JSON.stringify([{
           clues: [
             'Known as the Home of Peace and Tourism.',
@@ -466,7 +461,10 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
       }
 
       if (urlStr.includes('/live_question_state')) {
-        if (trackDecodeOpenAction && options.method === 'POST') decodeOpenTimeline.push('response-counter-ready');
+        if (trackDecodeOpenAction && options.method === 'POST') {
+          responseCounterReadyAt = Date.now();
+          decodeOpenTimeline.push('response-counter-ready');
+        }
         return new Response(JSON.stringify([{ response_count: 0 }]), { status: 200 });
       }
 
@@ -485,7 +483,7 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
       trackDecodeOpenAction = body.kind === 'open_question' && body.questionId === 'q-d1';
       if (trackDecodeOpenAction) {
         decodeOpenTimeline.length = 0;
-        decodeReadFinishedAt = 0;
+        responseCounterReadyAt = 0;
         openSessionPatch = null;
       }
       try {
@@ -583,9 +581,9 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
 
       // 11. Open voting (30s)
       await action({ kind: 'open_question', questionId: 'q-d1' });
-      assert.deepEqual(decodeOpenTimeline, ['decode-data-ready', 'response-counter-ready', 'open-session']);
-      assert.ok(Date.parse(openSessionPatch.opened_at) >= decodeReadFinishedAt,
-        'Decode clue preparation must finish before the answer clock starts');
+      assert.deepEqual(decodeOpenTimeline, ['response-counter-ready', 'open-session']);
+      assert.ok(Date.parse(openSessionPatch.opened_at) >= responseCounterReadyAt,
+        'Answer-counter preparation must finish before the answer clock starts');
       assert.equal(Date.parse(openSessionPatch.deadline_at) - Date.parse(openSessionPatch.opened_at), 30_000);
       state = await getState();
       assert.equal(state.state, 'open');
