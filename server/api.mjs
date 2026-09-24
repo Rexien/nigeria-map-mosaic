@@ -347,6 +347,16 @@ async function join(e) {
     return json(422, { error: 'Use a 2–30 character alias containing a letter or number.' });
   }
   const ev = await event();
+  const bearer = (e.headers?.authorization || e.headers?.Authorization || '').replace(/^Bearer\s+/i, '').trim();
+  const existing = await db(`participants?event_id=eq.${ev.id}&alias=ilike.${encodeURIComponent(alias)}&select=id,alias,token_hash,is_spectator,is_rehearsal`);
+  const matched = (existing || []).find(p => p.alias.trim().toLowerCase() === alias.toLowerCase());
+  if (matched) {
+    if (bearer && hash(bearer) === matched.token_hash) {
+      const credential = signParticipantCredential({ participantId: matched.id, eventId: ev.id, isSpectator: matched.is_spectator, isRehearsal: matched.is_rehearsal });
+      return json(200, { participant: { id: matched.id, alias: matched.alias, isSpectator: matched.is_spectator, isRehearsal: matched.is_rehearsal }, token: bearer, credential });
+    }
+    return json(409, { error: `That name is already taken. Try adding an initial (e.g. ${alias} O) or a nickname.` });
+  }
   const rawToken = token(32);
   const recovery = code();
   const settings = (await db(`event_settings?event_id=eq.${ev.id}&select=*`))[0];
@@ -496,7 +506,7 @@ async function me(e) {
   const session = (await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`))[0];
   const version = session?.version || 1;
   const snapshot = session ? (await db(`participant_score_snapshots?session_id=eq.${session.id}&participant_id=eq.${p.id}&snapshot_version=eq.${version}&select=rank,scores,stamps`))[0] : null;
-  const defaults = { day1: 0, day2: 0, combined: 0, decode: 0 };
+  const defaults = { day1: 0, day2: 0, combined: 0, passport: 0, decode: 0, total: 0 };
   return json(200, {
     participant: { id: p.id, alias: p.alias, registeredAt: p.registered_at, isSpectator: Boolean(p.is_spectator) },
     scores: snapshot?.scores || defaults,
@@ -562,11 +572,11 @@ async function lens(e) {
       participant_id: p.id,
       phrase: text,
       normalized_phrase: text.toLowerCase(),
-      status: 'approved'
+      status: 'pending'
     })
   });
   publicReads.clear();
-  return json(200, { submitted: true, message: 'Thank you. Your response has been added to Nigeria Through Your Lens.' });
+  return json(200, { submitted: true, message: 'Thank you. Your response has been submitted for review.' });
 }
 
 async function approvedLens() {
@@ -845,8 +855,16 @@ async function adminAction(e, admin) {
     if (!q) return json(422, { error: 'Only approved, non-void questions can be opened.' });
     if (session.state === 'open') return json(409, { error: 'A question is already open.' });
     if (session.state === 'ended') return json(409, { error: 'Return to the welcome screen before opening a question.' });
-    const now = new Date(), activity = q.quiz_rounds?.quiz_games?.activity || 'passport';
+    const activity = q.quiz_rounds?.quiz_games?.activity || 'passport';
     const clueNum = activity === 'decode' ? (session.current_question_id === q.id && session.current_clue ? session.current_clue : 3) : 1;
+    // Prepare server-side answer state before the timed question starts.
+    await db('live_question_state', {
+      method: 'POST',
+      prefer: 'resolution=merge-duplicates,return=representation',
+      body: JSON.stringify({ session_id: session.id, question_id: q.id, response_count: 0 })
+    });
+
+    const now = new Date();
     const after = (await db(`live_sessions?id=eq.${session.id}`, {
       method: 'PATCH',
       body: JSON.stringify({
@@ -860,11 +878,6 @@ async function adminAction(e, admin) {
         version: session.version + 1
       })
     }))[0];
-    await db('live_question_state', {
-      method: 'POST',
-      prefer: 'resolution=merge-duplicates,return=representation',
-      body: JSON.stringify({ session_id: session.id, question_id: q.id, response_count: 0 })
-    });
     await db(`event_settings?event_id=eq.${ev.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ active_activity: activity, screen_mode: 'activity', updated_at: now.toISOString() })
