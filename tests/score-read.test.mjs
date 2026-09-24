@@ -4,11 +4,14 @@ import { handler } from '../server/api.mjs';
 
 test('personal score uses one authenticated read and retains the latest revealed snapshot', async () => {
   const originalFetch = global.fetch;
+  const originalLog = console.log;
   const originalUrl = process.env.SUPABASE_URL;
   const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   process.env.SUPABASE_URL = 'https://db.example';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
   const paths = [];
+  const logs = [];
+  console.log = line => logs.push(JSON.parse(line));
   global.fetch = async url => {
     paths.push(String(url));
     assert.match(String(url), /\/participants\?token_hash=eq\./);
@@ -27,8 +30,15 @@ test('personal score uses one authenticated read and retains the latest revealed
     assert.equal(body.scores.combined, 800);
     assert.equal(body.rank, 3);
     assert.deepEqual(body.stamps, ['first']);
+    const requestLog = logs.find(log => log.event === 'api_request' && log.route === 'me');
+    assert.equal(requestLog.dependencyTiming.dependency, 'supabase_rest');
+    assert.equal(requestLog.dependencyTiming.operation, 'participant_snapshot_read');
+    assert.equal(requestLog.dependencyTiming.statusCode, 200);
+    assert.ok(Number.isFinite(requestLog.dependencyTiming.durationMs) && requestLog.dependencyTiming.durationMs >= 0);
+    assert.doesNotMatch(JSON.stringify(requestLog), /player-token|player-1|test-service-key/);
   } finally {
     global.fetch = originalFetch;
+    console.log = originalLog;
     if (originalUrl === undefined) delete process.env.SUPABASE_URL;
     else process.env.SUPABASE_URL = originalUrl;
     if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;

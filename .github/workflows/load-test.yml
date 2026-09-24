@@ -35,6 +35,11 @@ on:
         required: true
         type: number
         default: 10
+      confirm_quiet_window:
+        description: 'Confirm the shared event is quiet and may be temporarily changed by this rehearsal'
+        required: true
+        type: boolean
+        default: false
 
 env:
   NIAC_BASE_URL: https://niaclive-git-codex-load-reliability-zamijudes-projects.vercel.app
@@ -43,6 +48,7 @@ env:
   TEST_ROUNDS: ${{ inputs.rounds }}
   TEST_BURST_SECONDS: ${{ inputs.burst_seconds }}
   TEST_DUPLICATE_PERCENT: ${{ inputs.duplicate_percent }}
+  CONFIRM_QUIET_WINDOW: ${{ inputs.confirm_quiet_window }}
 
 permissions:
   contents: read
@@ -61,7 +67,8 @@ jobs:
       - name: Check out reviewed load-test code
         uses: actions/checkout@v4
         with:
-          ref: d7fd177a66ea2f0cca3fa2792700f538bfe0c4ec
+          # Keep the runner code aligned with the exact revision of this workflow.
+          ref: ${{ github.workflow_sha }}
           persist-credentials: false
 
       - name: Set up Node.js 22
@@ -77,6 +84,7 @@ jobs:
           case "$TEST_ROUNDS" in 1|3) ;; *) exit 1;; esac
           [[ "$TEST_BURST_SECONDS" =~ ^[1-9][0-9]?$ ]] || exit 1
           [[ "$TEST_DUPLICATE_PERCENT" =~ ^(0|[1-9][0-9]?|100)$ ]] || exit 1
+          test "$CONFIRM_QUIET_WINDOW" = true
           echo "Fixed Preview target and tier $TEST_TIER verified"
 
       - name: Read-Only Preflight Checks
@@ -87,6 +95,14 @@ jobs:
           import { preflight } from './scripts/load/preflight.mjs';
           const res = await preflight(process.env);
           console.log(JSON.stringify(res, null, 2));
+          if (process.env.CONFIRM_QUIET_WINDOW !== 'true') {
+            console.error('Load aborted: confirm the shared event quiet window before testing.');
+            process.exit(1);
+          }
+          if (!res.automatedReady) {
+            console.error('Load preflight safety checks failed:', res.automatedBlockers);
+            process.exit(1);
+          }
           const failedChecks = res.checks.filter(c => c.status !== 200);
           if (failedChecks.length > 0) {
             console.error('Preflight checks failed:', failedChecks);

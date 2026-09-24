@@ -506,16 +506,34 @@ async function bootstrap() {
 async function me(e) {
   const raw = bearer(e);
   if (!raw) throw Object.assign(new Error('Join the event first'), { status: 401 });
-  const p = (await db(`participants?token_hash=eq.${hash(raw)}&select=id,alias,registered_at,is_spectator,participant_score_snapshots(rank,scores,stamps)&participant_score_snapshots.order=created_at.desc&participant_score_snapshots.limit=1&limit=1`))[0];
-  if (!p) throw Object.assign(new Error('Participant session is not valid'), { status: 401 });
-  const snapshot = p.participant_score_snapshots?.[0] || null;
-  const defaults = { day1: 0, day2: 0, combined: 0, passport: 0, decode: 0, total: 0 };
-  return json(200, {
-    participant: { id: p.id, alias: p.alias, registeredAt: p.registered_at, isSpectator: Boolean(p.is_spectator) },
-    scores: snapshot?.scores || defaults,
-    rank: snapshot?.rank || '-',
-    stamps: snapshot?.stamps || []
-  });
+  const dependencyStartedAt = performance.now();
+  let statusCode = 200;
+  try {
+    const p = (await db(`participants?token_hash=eq.${hash(raw)}&select=id,alias,registered_at,is_spectator,participant_score_snapshots(rank,scores,stamps)&participant_score_snapshots.order=created_at.desc&participant_score_snapshots.limit=1&limit=1`))[0];
+    if (!p) {
+      statusCode = 401;
+      throw Object.assign(new Error('Participant session is not valid'), { status: 401 });
+    }
+    const snapshot = p.participant_score_snapshots?.[0] || null;
+    const defaults = { day1: 0, day2: 0, combined: 0, passport: 0, decode: 0, total: 0 };
+    return json(200, {
+      participant: { id: p.id, alias: p.alias, registeredAt: p.registered_at, isSpectator: Boolean(p.is_spectator) },
+      scores: snapshot?.scores || defaults,
+      rank: snapshot?.rank || '-',
+      stamps: snapshot?.stamps || []
+    });
+  } catch (error) {
+    statusCode = error.status || 500;
+    throw error;
+  } finally {
+    const context = requestContext.getStore();
+    if (context) context.dependencyTiming = {
+      dependency: 'supabase_rest',
+      operation: 'participant_snapshot_read',
+      statusCode,
+      durationMs: Math.max(0, Math.round(performance.now() - dependencyStartedAt))
+    };
+  }
 }
 
 async function answer(e) {
@@ -1110,12 +1128,12 @@ export async function handler(e) {
       }
 
       if (res) {
-        console.log(formatLog('info', 'api_request', { requestId, method, route, statusCode: res.statusCode, durationMs: Date.now() - startAt }));
+        console.log(formatLog('info', 'api_request', { requestId, method, route, statusCode: res.statusCode, durationMs: Date.now() - startAt, dependencyTiming: requestContext.getStore()?.dependencyTiming }));
         return res;
       }
       return json(404, { error: 'Not found' });
     } catch (err) {
-      console.error(formatLog('error', 'api_error', { requestId, error: err.message, status: err.status || 500, durationMs: Date.now() - startAt }));
+      console.error(formatLog('error', 'api_error', { requestId, error: err.message, status: err.status || 500, durationMs: Date.now() - startAt, dependencyTiming: requestContext.getStore()?.dependencyTiming }));
       return json(err.status || 500, {
         error: err.status && err.status < 500 ? err.message : 'The event service could not complete that request.',
         code: err.status === 503 ? 'GATEWAY_NOT_READY' : 'REQUEST_FAILED'
