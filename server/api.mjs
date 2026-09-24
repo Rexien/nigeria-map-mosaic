@@ -27,6 +27,26 @@ const hash = value => crypto.createHash('sha256').update(`${process.env.PARTICIP
 const token = bytes => crypto.randomBytes(bytes).toString('base64url');
 const code = () => `${token(3).slice(0, 4)}-${token(3).slice(0, 4)}`.toUpperCase();
 const routeOf = e => (e.path || '').replace(/^.*\/api\/?/, '').replace(/^\/+|\/+$/g, '');
+function transportCauseDetails(error, depth = 0) {
+  if (!error || typeof error !== 'object') return undefined;
+  const details = {};
+  for (const field of ['name', 'code', 'syscall', 'hostname', 'address', 'port']) {
+    const value = error[field];
+    if (typeof value === 'string' || typeof value === 'number') details[field] = value;
+  }
+  if (typeof error.message === 'string') {
+    details.message = error.message
+      .replace(/https?:\/\/\S+/gi, '[URL]')
+      .replace(/\bBearer\s+\S+/gi, 'Bearer [REDACTED]')
+      .replace(/[\r\n]+/g, ' ')
+      .slice(0, 240);
+  }
+  if (depth < 2 && error.cause && typeof error.cause === 'object') {
+    const nested = transportCauseDetails(error.cause, depth + 1);
+    if (nested) details.cause = nested;
+  }
+  return Object.keys(details).length ? details : undefined;
+}
 const publicReads = createReadCache(), rankingReads = createReadCache();
 const rateLimit = createRateLimiter();
 const clientIp = e => e.headers?.['x-real-ip'] || e.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || e.headers?.['x-nf-client-connection-ip'] || 'local';
@@ -1133,7 +1153,16 @@ export async function handler(e) {
       }
       return json(404, { error: 'Not found' });
     } catch (err) {
-      console.error(formatLog('error', 'api_error', { requestId, error: err.message, status: err.status || 500, durationMs: Date.now() - startAt, dependencyTiming: requestContext.getStore()?.dependencyTiming }));
+      const transportDetails = err.transportFailure ? transportCauseDetails(err.cause) : undefined;
+      console.error(formatLog('error', 'api_error', {
+        requestId,
+        error: err.message,
+        ...(err.dependency ? { dependency: err.dependency } : {}),
+        ...(transportDetails ? { errorCause: transportDetails } : {}),
+        status: err.status || 500,
+        durationMs: Date.now() - startAt,
+        dependencyTiming: requestContext.getStore()?.dependencyTiming
+      }));
       return json(err.status || 500, {
         error: err.status && err.status < 500 ? err.message : 'The event service could not complete that request.',
         code: err.status === 503 ? 'GATEWAY_NOT_READY' : 'REQUEST_FAILED'

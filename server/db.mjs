@@ -10,16 +10,24 @@ export function configured() { return Boolean(base() && key()); }
 
 export async function db(path, options = {}) {
   if (!configured()) throw Object.assign(new Error('Server database is not configured'), { status: 503 });
-  const response = await fetch(`${base()}/rest/v1/${path}`, {
-    ...options,
-    headers: {
-      apikey: key(),
-      Authorization: `Bearer ${key()}`,
-      'Content-Type': 'application/json',
-      Prefer: options.prefer || 'return=representation',
-      ...(options.headers || {})
-    }
-  });
+  let response;
+  try {
+    response = await fetch(`${base()}/rest/v1/${path}`, {
+      ...options,
+      headers: {
+        apikey: key(),
+        Authorization: `Bearer ${key()}`,
+        'Content-Type': 'application/json',
+        Prefer: options.prefer || 'return=representation',
+        ...(options.headers || {})
+      }
+    });
+  } catch (cause) {
+    throw Object.assign(new Error('Supabase REST transport request failed', { cause }), {
+      dependency: 'supabase_rest',
+      transportFailure: true
+    });
+  }
   const text = await response.text();
   const body = text ? JSON.parse(text) : null;
   if (!response.ok) throw Object.assign(new Error(body?.message || body?.hint || 'Database request failed'), { status: response.status, detail: body });
