@@ -97,8 +97,8 @@ const bearer=req=>String(req.headers.authorization||'').replace(/^Bearer\s+/i,''
 const participant=req=>data.participants.find(p=>p.token===bearer(req));
 const admin=req=>bearer(req)==='local-admin';
 const safeQuestion=()=>{const q=questions.find(x=>x.id===data.session.currentQuestionId);if(!q)return null;const out={...q};if(q.activity==='decode'){out.clueNumber=data.session.currentClue;out.clue=q.clues[data.session.currentClue-1];if(q.clueMedia&&q.clueMedia[data.session.currentClue-1]){out.media=q.clueMedia[data.session.currentClue-1];out.imageUrl=out.media.src;out.altText=out.media.alt;out.fallback=out.media.fallback;}out.cluesSoFar=q.clues.slice(0,data.session.currentClue);out.clueMediaSoFar=(q.clueMedia||[]).slice(0,data.session.currentClue);if(['revealed','leaderboard','round_complete'].includes(data.session.state)){out.highlightState=q.highlightState;}}return sanitizePublicQuestion(out,data.session.state)};
-const totals=p=>{const mine=data.answers.filter(a=>a.participantId===p.id);const sum=(activity,day)=>mine.filter(a=>a.activity===activity&&(!day||a.day===day)&&!a.voided).reduce((n,a)=>n+a.points,0);return{day1:sum('passport',1),day2:sum('passport',2),combined:sum('passport'),decode:sum('decode')}};
-const ranked=activity=>data.participants.map(p=>{const mine=data.answers.filter(a=>a.participantId===p.id&&a.activity===activity&&!a.voided);return{alias:p.alias,totalScore:mine.reduce((n,a)=>n+a.points,0),correctAnswers:mine.filter(a=>a.correct).length,correctResponseMs:mine.filter(a=>a.correct).reduce((n,a)=>n+a.responseMs,0),registeredAt:p.registeredAt}}).sort((a,b)=>(b.totalScore-a.totalScore)||(b.correctAnswers-a.correctAnswers)||(a.correctResponseMs-b.correctResponseMs)||(new Date(a.registeredAt)-new Date(b.registeredAt)));
+const totals=p=>{const mine=data.answers.filter(a=>a.participantId===p.id);const seen=new Set();const uniqueMine=mine.filter(a=>{const qId=a.questionId;if(!qId||seen.has(qId))return false;seen.add(qId);return true;});const sum=(activity,day)=>uniqueMine.filter(a=>a.activity===activity&&(!day||a.day===day)&&!a.voided).reduce((n,a)=>n+a.points,0);const day1=sum('passport',1),day2=sum('passport',2),passport=sum('passport'),decode=sum('decode'),total=passport+decode;return{day1,day2,combined:passport,passport,decode,total}};
+const ranked=activity=>data.participants.filter(p=>!p.isSpectator&&!p.isRehearsal).map(p=>{const mine=data.answers.filter(a=>a.participantId===p.id&&(!activity||a.activity===activity)&&!a.voided);const seen=new Set();const uniqueMine=mine.filter(a=>{if(!a.questionId||seen.has(a.questionId))return false;seen.add(a.questionId);return true;});const correct=uniqueMine.filter(a=>a.correct);return{alias:p.alias,totalScore:uniqueMine.reduce((n,a)=>n+a.points,0),correctAnswers:correct.length,correctResponseMs:correct.reduce((n,a)=>n+a.responseMs,0),registeredAt:p.registeredAt}}).sort((a,b)=>(b.totalScore-a.totalScore)||(b.correctAnswers-a.correctAnswers)||(a.correctResponseMs-b.correctResponseMs)||(new Date(a.registeredAt)-new Date(b.registeredAt)));
 const leaders=activity=>ranked(activity).slice(0,10);
 
 async function api(req,res,url){
@@ -179,7 +179,7 @@ async function api(req,res,url){
       console.log(formatLog('info','score_read',{requestId,participantId:p.id,rank:snap.rank,durationMs:Date.now()-reqStart,snapshot:true}));
       return resSend(200,{participant:{id:p.id,alias:p.alias},scores:snap.scores,rank:snap.rank,stamps:snap.stamps});
     }
-    const score=totals(p),rank=Math.max(1,ranked('passport').findIndex(x=>x.alias===p.alias)+1);
+    const score=totals(p),rank=Math.max(1,ranked().findIndex(x=>x.alias===p.alias)+1);
     const cats=new Set(data.answers.filter(a=>a.participantId===p.id&&a.activity==='passport'&&a.correct).map(a=>a.category));
     console.log(formatLog('info','score_read',{requestId,participantId:p.id,rank,durationMs:Date.now()-reqStart}));
     return resSend(200,{participant:{id:p.id,alias:p.alias},scores:score,rank,stamps:[...cats].map(category=>({category}))});
@@ -188,7 +188,7 @@ async function api(req,res,url){
     if(!p)return resSend(401,{error:'Join the event first'});
     const b=await body(req),phrase=clean(b.phrase);
     if(!phrase||phrase.length>72)return resSend(422,{error:'Enter a phrase of 72 characters or fewer.'});
-    const item={id:crypto.randomUUID(),participantId:p.id,phrase,status:'approved',createdAt:new Date().toISOString()};
+    const item={id:crypto.randomUUID(),participantId:p.id,phrase,status:'pending',createdAt:new Date().toISOString()};
     data.lens.push(item);await persist();
     console.log(formatLog('info','lens_submit',{requestId,participantId:p.id,submissionId:item.id,durationMs:Date.now()-reqStart}));
     return resSend(201,{submission:{id:item.id,phrase,status:item.status}});

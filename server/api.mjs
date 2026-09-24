@@ -496,7 +496,7 @@ async function me(e) {
   const session = (await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`))[0];
   const version = session?.version || 1;
   const snapshot = session ? (await db(`participant_score_snapshots?session_id=eq.${session.id}&participant_id=eq.${p.id}&snapshot_version=eq.${version}&select=rank,scores,stamps`))[0] : null;
-  const defaults = { day1: 0, day2: 0, combined: 0, decode: 0 };
+  const defaults = { day1: 0, day2: 0, combined: 0, passport: 0, decode: 0, total: 0 };
   return json(200, {
     participant: { id: p.id, alias: p.alias, registeredAt: p.registered_at, isSpectator: Boolean(p.is_spectator) },
     scores: snapshot?.scores || defaults,
@@ -562,11 +562,11 @@ async function lens(e) {
       participant_id: p.id,
       phrase: text,
       normalized_phrase: text.toLowerCase(),
-      status: 'approved'
+      status: 'pending'
     })
   });
   publicReads.clear();
-  return json(200, { submitted: true, message: 'Thank you. Your response has been added to Nigeria Through Your Lens.' });
+  return json(200, { submitted: true, message: 'Thank you. Your response has been submitted for review.' });
 }
 
 async function approvedLens() {
