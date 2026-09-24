@@ -502,10 +502,7 @@ async function bootstrap() {
 
 async function me(e) {
   const p = await participant(e);
-  const ev = await event();
-  const session = (await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`))[0];
-  const version = session?.version || 1;
-  const snapshot = session ? (await db(`participant_score_snapshots?session_id=eq.${session.id}&participant_id=eq.${p.id}&snapshot_version=eq.${version}&select=rank,scores,stamps`))[0] : null;
+  const snapshot = (await db(`participant_score_snapshots?participant_id=eq.${p.id}&select=rank,scores,stamps&order=created_at.desc&limit=1`))[0] || null;
   const defaults = { day1: 0, day2: 0, combined: 0, passport: 0, decode: 0, total: 0 };
   return json(200, {
     participant: { id: p.id, alias: p.alias, registeredAt: p.registered_at, isSpectator: Boolean(p.is_spectator) },
@@ -518,44 +515,33 @@ async function me(e) {
 async function answer(e) {
   const p = await participant(e);
   rateLimit(p.id,'answer', 12, 10000);
-  const s = (await db(`live_sessions?select=*&order=updated_at.desc&limit=1`))[0];
+  const body = JSON.parse(e.body || '{}');
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if(!uuid.test(body.sessionId||'') || !uuid.test(body.questionId||'') || !uuid.test(body.idempotencyKey||''))return json(422,{error:'Session, question and UUID idempotency key are required'});
+  const s = (await db(`live_sessions?id=eq.${body.sessionId}&event_id=eq.${p.event_id}&select=*`))[0];
+  if(!s || s.current_question_id!==body.questionId)return json(409,{error:'Answer does not match the active question',code:'SESSION_MISMATCH'});
   if (!s || s.state !== 'open' || !s.current_question_id) return json(409, { error: 'No question is open for answers right now' });
   if (s.deadline_at && Date.now() > new Date(s.deadline_at).getTime()) {
     await autoRevealSession(s);
     return json(409, { error: 'Answers are closed for this question' });
   }
-  const body = JSON.parse(e.body || '{}');
   const option = Number(body.optionIndex);
   if (!Number.isInteger(option) || option < 0 || option > 3) return json(422, { error: 'Choose option A, B, C or D' });
   if (p.is_spectator) {
     return json(200, { recorded: true, spectator: true, message: 'Interactive answer recorded in spectator mode.' });
   }
-  const key = `${p.id}:${s.current_question_id}`;
-  const duplicate = (await db(`gateway_answers?idempotency_key=eq.${encodeURIComponent(key)}&select=id`))[0]
-    || (await db(`participant_answers?participant_id=eq.${p.id}&question_id=eq.${s.current_question_id}&select=id`))[0];
-  if (duplicate) return json(409, { error: 'You have already submitted an answer for this question' });
-
-  const q = (await db(`quiz_questions?id=eq.${s.current_question_id}&select=duration_seconds,quiz_rounds(quiz_games(activity))`))[0];
-  const opened = s.opened_at ? new Date(s.opened_at).getTime() : Date.now();
-  const responseMs = Math.max(0, Date.now() - opened);
-  const activity = q?.quiz_rounds?.quiz_games?.activity || 'passport';
-  await db('rpc/submit_raw_quiz_answer', {
+  const result = await db('rpc/submit_raw_quiz_answer', {
     method: 'POST',
     body: JSON.stringify({
       p_session_id: s.id,
-      p_participant_id: p.id,
+      p_token_hash: hash(bearer(e)),
       p_question_id: s.current_question_id,
       p_option_index: option,
-      p_clue_number: activity === 'decode' ? (s.current_clue || 1) : null,
-      p_response_ms: responseMs,
-      p_idempotency_key: key
+      p_idempotency_key: body.idempotencyKey
     })
   });
-  await db('rpc/increment_live_response_count', {
-    method: 'POST',
-    body: JSON.stringify({ p_session_id: s.id, p_question_id: s.current_question_id })
-  });
-  return json(200, { recorded: true, message: 'Answer received — locked in.' });
+  if(!result?.accepted || !result.answerId)throw Object.assign(new Error('Answer persistence was not confirmed'),{status:503});
+  return json(200, { recorded:true,accepted:true,duplicate:result.duplicate===true,answerId:result.answerId,message:'Answer received — locked in.' });
 }
 
 async function lens(e) {
@@ -697,7 +683,14 @@ async function updateQuestion(e, admin) {
 async function adminAction(e, admin) {
   const b = JSON.parse(e.body || '{}');
   const ev = await event();
-  let session = (await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`))[0];
+  const openQuestionPromise = b.kind === 'open_question'
+    ? db(`quiz_questions?id=eq.${b.questionId}&review_status=eq.approved&is_void=eq.false&select=*,question_options(option_index,label),quiz_rounds(day,game_id,quiz_games(activity,title))`)
+    : Promise.resolve(null);
+  const [sessionRows, openQuestionRows] = await Promise.all([
+    db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`),
+    openQuestionPromise
+  ]);
+  let session = sessionRows[0];
 
   if (b.kind === 'show_welcome') {
     if (session?.state === 'open') {
@@ -850,12 +843,16 @@ async function adminAction(e, admin) {
 
   if (!session) return json(404, { error: 'No live session found' });
   if (b.kind === 'open_question') {
-    const q = (await db(`quiz_questions?id=eq.${b.questionId}&review_status=eq.approved&is_void=eq.false&select=id,round_id,duration_seconds,quiz_rounds(quiz_games(activity))`))[0];
+    const q = openQuestionRows?.[0];
     if (!q) return json(422, { error: 'Only approved, non-void questions can be opened.' });
     if (session.state === 'open') return json(409, { error: 'A question is already open.' });
     if (session.state === 'ended') return json(409, { error: 'Return to the welcome screen before opening a question.' });
     const activity = q.quiz_rounds?.quiz_games?.activity || 'passport';
     const clueNum = activity === 'decode' ? (session.current_question_id === q.id && session.current_clue ? session.current_clue : 3) : 1;
+    const decodeRows = activity === 'decode'
+      ? await db(`decode_state_rounds?round_id=eq.${q.round_id}&select=clues,clue_media,state_geo_id,reveal_fact`)
+      : null;
+
     // Prepare server-side answer state before the timed question starts.
     await db('live_question_state', {
       method: 'POST',
@@ -877,12 +874,65 @@ async function adminAction(e, admin) {
         version: session.version + 1
       })
     }))[0];
-    await db(`event_settings?event_id=eq.${ev.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ active_activity: activity, screen_mode: 'activity', updated_at: now.toISOString() })
-    });
-    await audit(admin, ev, 'open_question', 'live_session', session.id, session, after);
-    return json(200, { session: after });
+    const round = q.quiz_rounds;
+    const game = round?.quiz_games;
+    const options = (q.question_options || []).slice().sort((a, b) => a.option_index - b.option_index);
+    const question = {
+      id: q.id,
+      activity: game?.activity || activity,
+      title: game?.title,
+      day: round?.day,
+      order: q.display_order || null,
+      category: q.category,
+      question: q.question,
+      durationSeconds: q.duration_seconds,
+      imageUrl: q.image_url,
+      altText: q.alt_text,
+      media: q.media || null,
+      fallback: q.image_fallback || null,
+      options: options.map(option => option.label)
+    };
+    if (activity === 'decode') {
+      const decode = decodeRows?.[0];
+      question.clueNumber = clueNum;
+      question.clue = decode?.clues?.[clueNum - 1] || null;
+      if (decode?.clue_media?.[clueNum - 1]) {
+        question.media = decode.clue_media[clueNum - 1];
+        question.imageUrl = question.media.src;
+        question.altText = question.media.alt;
+        question.fallback = question.media.fallback;
+      }
+      question.cluesSoFar = (decode?.clues || []).slice(0, clueNum);
+      question.clueMediaSoFar = (decode?.clue_media || []).slice(0, clueNum);
+    }
+    const result = json(200, { session: after });
+    result.gatewayEnvelope = createStateEnvelope({
+      event: ev,
+      eventId: ev.id,
+      sessionId: after.id,
+      version: after.version,
+      state: after.state,
+      activity,
+      screenMode: 'activity',
+      currentClue: after.current_clue,
+      openedAt: after.opened_at,
+      deadlineAt: after.deadline_at,
+      responseCount: 0,
+      serverNow: new Date().toISOString()
+    }, question);
+    const broadcastPromise = gatewayBase()
+      ? gatewayCall('broadcast', result.gatewayEnvelope).then(() => true, () => false)
+      : Promise.resolve(false);
+    const [, , broadcasted] = await Promise.all([
+      db(`event_settings?event_id=eq.${ev.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active_activity: activity, screen_mode: 'activity', updated_at: now.toISOString() })
+      }),
+      audit(admin, ev, 'open_question', 'live_session', session.id, session, after),
+      broadcastPromise
+    ]);
+    result.gatewayBroadcasted = broadcasted;
+    return result;
   }
   if (b.kind === 'select_question') {
     const q = (await db(`quiz_questions?id=eq.${b.questionId}&review_status=eq.approved&is_void=eq.false&select=id,round_id`))[0];
@@ -1017,8 +1067,15 @@ export async function handler(e) {
       if (mutated) {
         publicReads.clear();
         rankingReads.clear();
+        const gatewayEnvelope = res?.gatewayEnvelope;
+        if (res?.gatewayEnvelope) delete res.gatewayEnvelope;
+        const alreadyBroadcast = Boolean(res?.gatewayBroadcasted);
+        if (res?.gatewayBroadcasted) delete res.gatewayBroadcasted;
         try {
-          await pushGatewayState();
+          if (!alreadyBroadcast) {
+            if (gatewayEnvelope) await gatewayCall('broadcast', gatewayEnvelope);
+            else await pushGatewayState();
+          }
         } catch (error) {
           console.error(formatLog('error', 'gateway_broadcast_failed', { requestId, error: error.message }));
         }

@@ -72,6 +72,12 @@ test('participant credentials: dual-key rotation allows previous key seamlessly'
   assert.equal(rotatedRes.payload.participantId, 'p-migrating');
 });
 
+test('participant credential secrets normalize surrounding deployment whitespace',()=>{
+  const token=signParticipantCredential({participantId:'p-whitespace'},'  rotated-secret\r\n');
+  assert.equal(verifyParticipantCredential(token,'rotated-secret').valid,true);
+  assert.equal(verifyParticipantCredential(token,'different','\n rotated-secret \n').valid,true);
+});
+
 test('SQLite WAL queue: high-throughput group commits and atomic deduplication', async () => {
   const queue = new SQLiteAnswerQueue(':memory:', {
     groupCommitIntervalMs: 10,

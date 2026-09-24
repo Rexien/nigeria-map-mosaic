@@ -229,6 +229,7 @@ test('gateway server handles real HTTP SSE streams, health checks, and broadcast
   // Clean up
   clientReq.destroy();
   await new Promise(r => setTimeout(r, 50));
+  assert.equal(sseClients.size, 0, 'Disconnected SSE responses must leave the fanout set');
   await new Promise(resolve => server.close(resolve));
   resetClients();
 });

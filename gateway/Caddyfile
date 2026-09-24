@@ -11,11 +11,10 @@
     reverse_proxy gateway:3000
   }
 
-  # SSE Broadcast Stream (disable proxy buffering)
+  # SSE responses are flushed immediately based on their content type.
+  # Keep the normal proxy cancellation behavior so disconnected clients close upstream streams.
   handle /gateway/stream {
-    reverse_proxy gateway:3000 {
-      flush_interval -1
-    }
+    reverse_proxy gateway:3000
   }
 
   # Answer Ingress & Gateway API

@@ -94,7 +94,8 @@ test('production deployment assets contain required limits, health checks, and p
   const caddyfilePath = path.resolve(process.cwd(), 'gateway/Caddyfile');
   assert.ok(fs.existsSync(caddyfilePath), 'gateway/Caddyfile must exist');
   const caddyfile = fs.readFileSync(caddyfilePath, 'utf8');
-  assert.match(caddyfile, /flush_interval -1/);
+  assert.match(caddyfile, /handle \/gateway\/stream\s*\{\s*reverse_proxy gateway:3000\s*\}/);
+  assert.doesNotMatch(caddyfile, /flush_interval\s+-1/);
   assert.match(caddyfile, /\/gateway\/health/);
   assert.match(caddyfile, /\/gateway\/stream/);
 
