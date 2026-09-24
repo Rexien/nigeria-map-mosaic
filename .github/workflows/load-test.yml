@@ -25,6 +25,14 @@ on:
         options:
           - '1'
           - '3'
+      question_mode:
+        description: 'Question to exercise (open-image excludes reveal-only media)'
+        required: true
+        type: choice
+        default: 'open-image'
+        options:
+          - 'open-image'
+          - 'first-approved'
       burst_seconds:
         description: 'Answer submission burst window in seconds'
         required: true
@@ -46,6 +54,7 @@ env:
   NIAC_GATEWAY_URL: https://92.4.146.91.sslip.io
   TEST_TIER: ${{ inputs.tier }}
   TEST_ROUNDS: ${{ inputs.rounds }}
+  TEST_QUESTION_MODE: ${{ inputs.question_mode }}
   TEST_BURST_SECONDS: ${{ inputs.burst_seconds }}
   TEST_DUPLICATE_PERCENT: ${{ inputs.duplicate_percent }}
   CONFIRM_QUIET_WINDOW: ${{ inputs.confirm_quiet_window }}
@@ -82,6 +91,7 @@ jobs:
           test "$NIAC_GATEWAY_URL" = 'https://92.4.146.91.sslip.io'
           case "$TEST_TIER" in 5|10|50|100|250|500|750|1000) ;; *) exit 1;; esac
           case "$TEST_ROUNDS" in 1|3) ;; *) exit 1;; esac
+          case "$TEST_QUESTION_MODE" in open-image|first-approved) ;; *) exit 1;; esac
           [[ "$TEST_BURST_SECONDS" =~ ^[1-9][0-9]?$ ]] || exit 1
           [[ "$TEST_DUPLICATE_PERCENT" =~ ^(0|[1-9][0-9]?|100)$ ]] || exit 1
           test "$CONFIRM_QUIET_WINDOW" = true
@@ -139,6 +149,7 @@ jobs:
           node scripts/load/run-tier.mjs \
             --participants "$TEST_TIER" \
             --rounds "$TEST_ROUNDS" \
+            --question-mode "$TEST_QUESTION_MODE" \
             --burst-seconds "$TEST_BURST_SECONDS" \
             --duplicate-percent "$TEST_DUPLICATE_PERCENT" \
             --fanout-abort-ms 3000 \

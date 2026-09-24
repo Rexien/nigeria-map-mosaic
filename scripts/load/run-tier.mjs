@@ -12,6 +12,45 @@ import { verifyDurableAnswers } from './durable.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+export function selectApprovedQuestions(questions, questionMode = 'first-approved') {
+  const approved = questions.filter(q =>
+    (q.reviewStatus === 'approved' || q.review_status === 'approved') &&
+    !(q.isVoid ?? q.is_void ?? false)
+  );
+  if (questionMode === 'first-approved') return approved;
+  if (questionMode === 'open-image') {
+    return approved.filter(q => q.media?.src && q.media?.timing === 'question');
+  }
+  throw new Error(`Unknown question mode: ${questionMode}`);
+}
+
+export async function fetchQuestionImageBurst({ assetUrl, clientCount, headers = {}, fetchImpl = fetch }) {
+  const results = await Promise.all(Array.from({ length: clientCount }, async () => {
+    const startedAt = performance.now();
+    try {
+      const response = await fetchImpl(assetUrl, { headers, signal: AbortSignal.timeout(15000) });
+      const bytes = await response.arrayBuffer();
+      return {
+        ok: response.ok && (response.headers.get('content-type') || '').toLowerCase().startsWith('image/'),
+        status: response.status,
+        durationMs: performance.now() - startedAt,
+        bytes: bytes.byteLength
+      };
+    } catch (error) {
+      return { ok: false, status: 0, durationMs: performance.now() - startedAt, bytes: 0, error: error.message };
+    }
+  }));
+  const latencies = computeLatencyPercentiles(results.map(r => r.durationMs));
+  return {
+    requested: clientCount,
+    succeeded: results.filter(r => r.ok).length,
+    failed: results.filter(r => !r.ok).length,
+    totalBytes: results.reduce((sum, r) => sum + r.bytes, 0),
+    statuses: results.reduce((counts, r) => ({ ...counts, [r.status]: (counts[r.status] || 0) + 1 }), {}),
+    latencies
+  };
+}
+
 export async function runTier(options = {}) {
   const env = options.env || process.env;
   const baseUrl = (options.baseUrl || env.NIAC_BASE_URL || 'https://niaclive-git-feature-admin-pin-auth-zamijudes-projects.vercel.app').replace(/\/$/, '');
@@ -34,6 +73,7 @@ export async function runTier(options = {}) {
   const duplicatePercent = Number(options.duplicatePercent || 10);
   const rounds = Number(options.rounds || 1);
   const fanoutAbortMs = Number(options.fanoutAbortMs || 2000);
+  const questionMode = options.questionMode || 'first-approved';
   const adminPin = options.adminPin || env.ADMIN_PIN;
   if(!adminPin)throw new Error('ADMIN_PIN is required');
   if(!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Refusing load without durable verification credentials');
@@ -80,14 +120,14 @@ export async function runTier(options = {}) {
   const statusData = await statusRes.json();
   const sessionId = statusData.session?.id;
   const questions = statusData.questions || [];
-  const approvedQuestions = questions.filter(q => 
-    (q.reviewStatus === 'approved' || q.review_status === 'approved') && 
-    !(q.isVoid ?? q.is_void ?? false)
-  );
+  const approvedQuestions = selectApprovedQuestions(questions, questionMode);
 
-  if (!approvedQuestions.length) throw new Error('No approved questions found');
+  if (!approvedQuestions.length) {
+    if (questionMode === 'open-image') throw new Error('No approved question has an image shown while answers are open');
+    throw new Error('No approved questions found');
+  }
   if(rounds>approvedQuestions.length)throw new Error('Cannot reuse questions for the same participant identities');
-  console.log(`  Found ${approvedQuestions.length} approved questions for live rounds.`);
+  console.log(`  Found ${approvedQuestions.length} approved questions for live rounds (${questionMode}).`);
 
   const roundReports = [];
 
@@ -119,6 +159,15 @@ export async function runTier(options = {}) {
     if(openData.session.id!==sessionId)throw new Error('Session changed during test');
     const deadlineAt = new Date(openData.session.deadline_at).getTime();
     console.log(`  ✓ Question Opened (v${openVersion}). Deadline: ${openData.session.deadline_at}`);
+
+    let imageBurst = null;
+    if (currentQ.media?.src && currentQ.media?.timing === 'question') {
+      const assetUrl = new URL(currentQ.media.src, baseUrl).toString();
+      console.log(`  Loading question image for ${participants.length} simulated clients: ${assetUrl}`);
+      imageBurst = await fetchQuestionImageBurst({ assetUrl, clientCount: participants.length, headers });
+      console.log(`  Image fetches: ${imageBurst.succeeded}/${imageBurst.requested}; p95 ${imageBurst.latencies.p95}ms; ${imageBurst.totalBytes} bytes transferred`);
+      if (imageBurst.failed) throw new Error(`Question image failed to load for ${imageBurst.failed}/${imageBurst.requested} simulated clients`);
+    }
 
     // Wait up to the acceptance boundary for every listener, then evaluate latency.
     const fanout = await observer.waitForFanout(openVersion,participants.length,3000);
@@ -231,7 +280,8 @@ export async function runTier(options = {}) {
       duplicateCount: duplicates.length,
       durable,
       fanout,
-      latencies
+      latencies,
+      imageBurst
     });
   }
 
@@ -333,9 +383,10 @@ if (process.argv[1] && process.argv[1].endsWith('run-tier.mjs')) {
   const duplicatePercent = Number(getArg('--duplicate-percent', 10));
   const rounds = Number(getArg('--rounds', 1));
   const fanoutAbortMs = Number(getArg('--fanout-abort-ms', 2000));
+  const questionMode = getArg('--question-mode', 'first-approved');
   const runId = getArg('--run-id', process.env.NIAC_RUN_ID || `rehearsal-${Date.now()}`);
 
-  runTier({ participants, burstSeconds, duplicatePercent, rounds, fanoutAbortMs, runId })
+  runTier({ participants, burstSeconds, duplicatePercent, rounds, fanoutAbortMs, questionMode, runId })
     .then(report => process.exit(report.passed ? 0 : 1))
     .catch(err => {
       console.error('[Run-Tier Error]', err);

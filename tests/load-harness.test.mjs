@@ -5,6 +5,32 @@ import {submitAnswer} from '../scripts/load/client-worker.mjs';
 import {SSEObserverPool} from '../scripts/load/sse-observer.mjs';
 import {reconcileAnswers} from '../scripts/load/durable.mjs';
 import {rehearsalAlias} from '../scripts/load/prepare.mjs';
+import {fetchQuestionImageBurst, selectApprovedQuestions} from '../scripts/load/run-tier.mjs';
+
+test('open-image mode selects only approved images shown during answering',()=>{
+  const questions=[
+    {id:'text',reviewStatus:'approved'},
+    {id:'reveal-image',reviewStatus:'approved',media:{src:'/reveal.jpg',timing:'reveal'}},
+    {id:'open-image',review_status:'approved',media:{src:'/question.jpg',timing:'question'}},
+    {id:'void-image',reviewStatus:'approved',isVoid:true,media:{src:'/void.jpg',timing:'question'}}
+  ];
+  assert.deepEqual(selectApprovedQuestions(questions,'open-image').map(q=>q.id),['open-image']);
+  assert.throws(()=>selectApprovedQuestions(questions,'bad-mode'),/Unknown question mode/);
+});
+
+test('question image burst counts successful image transfers and latency',async()=>{
+  const result=await fetchQuestionImageBurst({
+    assetUrl:'https://preview.invalid/photo.jpg',
+    clientCount:3,
+    fetchImpl:async()=>new Response(new Uint8Array([1,2,3]),{status:200,headers:{'content-type':'image/jpeg'}})
+  });
+  assert.equal(result.requested,3);
+  assert.equal(result.succeeded,3);
+  assert.equal(result.failed,0);
+  assert.equal(result.totalBytes,9);
+  assert.equal(result.statuses[200],3);
+  assert.equal(result.latencies.max>=0,true);
+});
 
 test('rehearsal aliases remain valid for long run IDs',()=>{
   const alias=rehearsalAlias('phase2-smoke-20260922-155509',1);
