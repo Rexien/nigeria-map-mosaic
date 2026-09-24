@@ -849,6 +849,10 @@ async function adminAction(e, admin) {
     if (session.state === 'ended') return json(409, { error: 'Return to the welcome screen before opening a question.' });
     const activity = q.quiz_rounds?.quiz_games?.activity || 'passport';
     const clueNum = activity === 'decode' ? (session.current_question_id === q.id && session.current_clue ? session.current_clue : 3) : 1;
+    const decodeRows = activity === 'decode'
+      ? await db(`decode_state_rounds?round_id=eq.${q.round_id}&select=clues,clue_media,state_geo_id,reveal_fact`)
+      : null;
+
     // Prepare server-side answer state before the timed question starts.
     await db('live_question_state', {
       method: 'POST',
@@ -870,17 +874,6 @@ async function adminAction(e, admin) {
         version: session.version + 1
       })
     }))[0];
-    const decodePromise = activity === 'decode'
-      ? db(`decode_state_rounds?round_id=eq.${q.round_id}&select=clues,clue_media,state_geo_id,reveal_fact`)
-      : Promise.resolve(null);
-    const [, decodeRows] = await Promise.all([
-      db(`event_settings?event_id=eq.${ev.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ active_activity: activity, screen_mode: 'activity', updated_at: now.toISOString() })
-      }),
-      decodePromise,
-      audit(admin, ev, 'open_question', 'live_session', session.id, session, after)
-    ]);
     const round = q.quiz_rounds;
     const game = round?.quiz_games;
     const options = (q.question_options || []).slice().sort((a, b) => a.option_index - b.option_index);
@@ -927,6 +920,18 @@ async function adminAction(e, admin) {
       responseCount: 0,
       serverNow: new Date().toISOString()
     }, question);
+    const broadcastPromise = gatewayBase()
+      ? gatewayCall('broadcast', result.gatewayEnvelope).then(() => true, () => false)
+      : Promise.resolve(false);
+    const [, , broadcasted] = await Promise.all([
+      db(`event_settings?event_id=eq.${ev.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ active_activity: activity, screen_mode: 'activity', updated_at: now.toISOString() })
+      }),
+      audit(admin, ev, 'open_question', 'live_session', session.id, session, after),
+      broadcastPromise
+    ]);
+    result.gatewayBroadcasted = broadcasted;
     return result;
   }
   if (b.kind === 'select_question') {
@@ -1064,9 +1069,13 @@ export async function handler(e) {
         rankingReads.clear();
         const gatewayEnvelope = res?.gatewayEnvelope;
         if (res?.gatewayEnvelope) delete res.gatewayEnvelope;
+        const alreadyBroadcast = Boolean(res?.gatewayBroadcasted);
+        if (res?.gatewayBroadcasted) delete res.gatewayBroadcasted;
         try {
-          if (gatewayEnvelope) await gatewayCall('broadcast', gatewayEnvelope);
-          else await pushGatewayState();
+          if (!alreadyBroadcast) {
+            if (gatewayEnvelope) await gatewayCall('broadcast', gatewayEnvelope);
+            else await pushGatewayState();
+          }
         } catch (error) {
           console.error(formatLog('error', 'gateway_broadcast_failed', { requestId, error: error.message }));
         }

@@ -291,6 +291,7 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
     const originalFetch = global.fetch;
     let trackDecodeOpenAction = false;
     let responseCounterReadyAt = 0;
+    let decodeReadFinishedAt = 0;
     let openSessionPatch = null;
     const decodeOpenTimeline = [];
 
@@ -448,6 +449,11 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
       }
 
       if (urlStr.includes('/decode_state_rounds')) {
+        if (trackDecodeOpenAction) {
+          await new Promise(resolve => setTimeout(resolve, 120));
+          decodeReadFinishedAt = Date.now();
+          decodeOpenTimeline.push('decode-data-ready');
+        }
         return new Response(JSON.stringify([{
           clues: [
             'Known as the Home of Peace and Tourism.',
@@ -484,6 +490,7 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
       if (trackDecodeOpenAction) {
         decodeOpenTimeline.length = 0;
         responseCounterReadyAt = 0;
+        decodeReadFinishedAt = 0;
         openSessionPatch = null;
       }
       try {
@@ -581,7 +588,9 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
 
       // 11. Open voting (30s)
       await action({ kind: 'open_question', questionId: 'q-d1' });
-      assert.deepEqual(decodeOpenTimeline, ['response-counter-ready', 'open-session']);
+      assert.deepEqual(decodeOpenTimeline, ['decode-data-ready', 'response-counter-ready', 'open-session']);
+      assert.ok(Date.parse(openSessionPatch.opened_at) >= decodeReadFinishedAt,
+        'Decode clue preparation must finish before the answer clock starts');
       assert.ok(Date.parse(openSessionPatch.opened_at) >= responseCounterReadyAt,
         'Answer-counter preparation must finish before the answer clock starts');
       assert.equal(Date.parse(openSessionPatch.deadline_at) - Date.parse(openSessionPatch.opened_at), 30_000);
