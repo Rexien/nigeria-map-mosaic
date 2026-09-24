@@ -602,8 +602,7 @@ async function leaderboard(e) {
   const activity = clean(e.queryStringParameters?.activity || url.searchParams.get('activity') || 'passport');
   const ev = await event();
   const session = (await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`))[0];
-  const version = session?.version || 1;
-  const snapshot = session ? (await db(`leaderboard_snapshots?session_id=eq.${session.id}&activity=eq.${activity}&snapshot_version=eq.${version}&select=leaders`))[0] : null;
+  const snapshot = session ? (await db(`leaderboard_snapshots?session_id=eq.${session.id}&activity=eq.${activity}&select=leaders&order=snapshot_version.desc&limit=1`))[0] : null;
   return json(200, { activity, leaders: snapshot?.leaders || [] });
 }
 
