@@ -112,6 +112,15 @@ async function api(req,res,url){
   if(path==='/participants'&&req.method==='POST'){
     const b=await body(req),alias=clean(b.alias);
     if(alias.length<2||alias.length>30)return resSend(422,{error:'Use a 2–30 character alias.'});
+    const bearer=(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
+    const existing=data.participants.find(p=>p.alias.trim().toLowerCase()===alias.toLowerCase());
+    if(existing){
+      if(bearer&&bearer===existing.token){
+        const credential=signParticipantCredential({participantId:existing.id,eventId:'niac-2026',isRehearsal:Boolean(b.rehearsal),isSpectator:Boolean(existing.isSpectator)});
+        return resSend(200,{participant:{id:existing.id,alias:existing.alias,isSpectator:existing.isSpectator},token:existing.token,credential});
+      }
+      return resSend(409,{error:`That name is already taken. Try adding an initial (e.g. ${alias} O) or a nickname.`});
+    }
     const maxActive=Number(data.settings.maxActivePlayers||1500);
     const activeCount=data.participants.filter(p=>!p.isSpectator).length;
     const isSpectator=Boolean(b.spectator||data.settings.rosterFrozen||(data.settings.capacityMode==='red')||(activeCount>=maxActive));
