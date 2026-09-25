@@ -4,6 +4,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { SSEObserverPool } from './sse-observer.mjs';
 import { MetricsCollector } from './collect.mjs';
@@ -180,6 +181,14 @@ export async function runTier(options = {}) {
     // Schedule and dispatch answers
     console.log(`  Ingesting answers across ${burstSeconds}s burst window...`);
     const totalDurationMs = burstSeconds * 1000;
+    const burstStartPerf = performance.now();
+    const burstStartEpoch = Date.now();
+    const runnerCpuStart = process.cpuUsage();
+    const loopDelay = monitorEventLoopDelay({ resolution: 10 });
+    loopDelay.enable();
+    let peakRss = process.memoryUsage().rss;
+    const memorySampler = setInterval(() => { peakRss = Math.max(peakRss, process.memoryUsage().rss); }, 100);
+    memorySampler.unref();
     const answerPromises = [];
     const submissionResults = [];
 
@@ -197,6 +206,8 @@ export async function runTier(options = {}) {
 
       const pPromise = (async () => {
         await new Promise(res => setTimeout(res, offsetMs));
+        const dispatchPerf = performance.now();
+        const dispatchedAt = new Date().toISOString();
         const res = await submitAnswer({
           gatewayUrl,
           participant: p,
@@ -205,6 +216,9 @@ export async function runTier(options = {}) {
           optionIndex: chosenOption,
           bypassSecret
         });
+        res.runnerScheduledAt = new Date(burstStartEpoch + offsetMs).toISOString();
+        res.runnerDispatchedAt = dispatchedAt;
+        res.runnerScheduleSlipMs = Number(Math.max(0, dispatchPerf - (burstStartPerf + offsetMs)).toFixed(2));
         submissionResults.push(res);
 
         // Duplicate retry simulation
@@ -227,18 +241,44 @@ export async function runTier(options = {}) {
       answerPromises.push(pPromise);
     }
 
-    await Promise.all(answerPromises);
+    try {
+      await Promise.all(answerPromises);
+    } finally {
+      clearInterval(memorySampler);
+      loopDelay.disable();
+    }
+    const runnerCpu = process.cpuUsage(runnerCpuStart);
+    const runnerStats = {
+      eventLoopLagP95Ms: Number((loopDelay.percentile(95) / 1e6).toFixed(2)),
+      eventLoopLagMaxMs: Number((loopDelay.max / 1e6).toFixed(2)),
+      cpuPercentOfOneCore: Number((((runnerCpu.user + runnerCpu.system) / 1000) / (performance.now() - burstStartPerf) * 100).toFixed(1)),
+      peakRssMiB: Number((peakRss / 1048576).toFixed(1))
+    };
 
     fs.writeFileSync(path.join(outDir,`round-${r+1}-attempts.json`),JSON.stringify(submissionResults,null,2));
     const firstAttempts = submissionResults.filter(s => s.attemptKind==='first');
     const duplicates = submissionResults.filter(s => s.attemptKind==='retry' && s.accepted && s.duplicate);
     const acceptedCount = firstAttempts.filter(s => s.accepted).length;
     const latencies = computeLatencyPercentiles(submissionResults.map(s => s.durationMs));
+    const phaseStats = {
+      runnerScheduleSlip: computeLatencyPercentiles(firstAttempts.map(s => s.runnerScheduleSlipMs)),
+      fetchStartToSendHeaders: computeLatencyPercentiles(firstAttempts.map(s => s.timing?.gateway?.fetchStartToSendHeadersMs).filter(Number.isFinite)),
+      newSocketReady: computeLatencyPercentiles(firstAttempts.map(s => s.timing?.gateway?.requestCreatedToSocketConnectedMs).filter(Number.isFinite)),
+      sendHeadersToFirstByte: computeLatencyPercentiles(firstAttempts.map(s => s.timing?.gateway?.sendHeadersToFirstByteMs).filter(Number.isFinite)),
+      firstByteToFinished: computeLatencyPercentiles(firstAttempts.map(s => s.timing?.gateway?.firstByteToFinishedMs).filter(Number.isFinite)),
+      newSockets: firstAttempts.filter(s => s.timing?.gateway?.socketUseNumber === 1).length,
+      reusedSockets: firstAttempts.filter(s => (s.timing?.gateway?.socketUseNumber || 0) > 1).length,
+      unknownSockets: firstAttempts.filter(s => s.timing?.gateway?.socketUseNumber == null).length,
+      protocols: [...new Set(firstAttempts.map(s => s.timing?.gateway?.alpnProtocol).filter(Boolean))]
+    };
 
     console.log(`  ✓ Answer Ingestion Complete:`);
     console.log(`    - First Attempts: ${firstAttempts.length} (Accepted: ${acceptedCount}/${participants.length})`);
     console.log(`    - Duplicates:     ${duplicates.length}`);
     console.log(`    - Latency (p50):  ${latencies.p50}ms | (p95): ${latencies.p95}ms | (max): ${latencies.max}ms`);
+    console.log(`    - Runner schedule slip p95: ${phaseStats.runnerScheduleSlip.p95}ms; fetch-to-send p95: ${phaseStats.fetchStartToSendHeaders.p95}ms; send-to-first-byte p95: ${phaseStats.sendHeadersToFirstByte.p95}ms; body p95: ${phaseStats.firstByteToFinished.p95}ms`);
+    console.log(`    - Answer sockets: ${phaseStats.newSockets} new, ${phaseStats.reusedSockets} reused, ${phaseStats.unknownSockets} unknown; ALPN: ${phaseStats.protocols.join(', ') || 'unavailable'}`);
+    console.log(`    - New-socket ready p95 (queue + DNS/TCP/TLS upper bound): ${phaseStats.newSocketReady.p95}ms; runner event-loop lag p95/max: ${runnerStats.eventLoopLagP95Ms}/${runnerStats.eventLoopLagMaxMs}ms; runner CPU: ${runnerStats.cpuPercentOfOneCore}% of one core; peak RSS: ${runnerStats.peakRssMiB}MiB`);
 
     // Wait until deadline expires
     const now = Date.now();
@@ -281,6 +321,8 @@ export async function runTier(options = {}) {
       durable,
       fanout,
       latencies,
+      phaseStats,
+      runnerStats,
       imageBurst
     });
   }

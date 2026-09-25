@@ -64,10 +64,40 @@ test('network failure fallback preserves the exact answer identity and payload',
     assert.equal(result.routedTo,'fallback');
     assert.equal(result.accepted,true);
     assert.equal(result.answerId,'durable');
+    assert.ok(result.timing.gateway.startedAt);
+    assert.ok(result.timing.fallback.startedAt);
     assert.deepEqual(calls[1].body,{sessionId:'s',questionId:'q',optionIndex:3,idempotencyKey:'00000000-0000-4000-8000-000000000003'});
     assert.equal(calls[1].headers.Authorization,'Bearer opaque');
     assert.equal(calls[1].headers['x-vercel-protection-bypass'],'fixture');
   } finally {globalThis.fetch=original;}
+});
+
+test('answer diagnostics capture real fetch send and receive phases without changing the request',async()=>{
+  const server=http.createServer((_req,res)=>{
+    res.writeHead(200,{'content-type':'application/json'});
+    res.end(JSON.stringify({accepted:true,duplicate:false,answerId:'diagnostic-answer'}));
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  try {
+    const result=await submitAnswer({
+      gatewayUrl:`http://127.0.0.1:${server.address().port}`,
+      participant:{id:'diagnostic-player',credential:'fixture'},
+      sessionId:'session',questionId:'question',optionIndex:2
+    });
+    assert.equal(result.accepted,true);
+    assert.equal(result.answerId,'diagnostic-answer');
+    assert.ok(result.timing.gateway.startedAt);
+    assert.ok(result.timing.gateway.requestCreatedAt);
+    assert.ok(result.timing.gateway.headersSentAt);
+    assert.ok(result.timing.gateway.firstByteAt);
+    assert.ok(result.timing.gateway.finishedAt);
+    assert.ok(result.timing.gateway.fetchStartToSendHeadersMs>=0);
+    assert.ok(result.timing.gateway.sendHeadersToFirstByteMs>=0);
+    assert.ok(result.timing.gateway.firstByteToFinishedMs>=0);
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve=>server.close(resolve));
+  }
 });
 
 test('durable reconciliation rejects lost, changed and conflicting accepted answers',()=>{
