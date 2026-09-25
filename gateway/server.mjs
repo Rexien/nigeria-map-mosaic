@@ -5,7 +5,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { formatLog, globalMetrics } from '../lib/telemetry.mjs';
-import { createStateEnvelope, verifyStateEnvelope } from '../lib/state-envelope.mjs';
+import { computeStateChecksum, createStateEnvelope, verifyStateEnvelope } from '../lib/state-envelope.mjs';
 import { verifyParticipantCredential } from '../lib/credentials.mjs';
 import { SQLiteAnswerQueue } from './lib/sqlite-queue.mjs';
 import { BatchFlusher } from './lib/batch-flusher.mjs';
@@ -38,10 +38,16 @@ export function setCachedEnvelope(envelope) {
   cachedEnvelope = envelope;
 }
 
+function stampedEnvelope(envelope) {
+  const { checksum, ...payload } = envelope;
+  const fresh = { ...payload, serverNow: new Date().toISOString() };
+  return { ...fresh, checksum: computeStateChecksum(fresh) };
+}
+
 export function broadcastState(envelope) {
-  cachedEnvelope = envelope;
-  authoritySyncObserver?.observe(envelope);
-  const payload = `id: ${envelope.version}\nevent: state\ndata: ${JSON.stringify(envelope)}\n\n`;
+  cachedEnvelope = stampedEnvelope(envelope);
+  authoritySyncObserver?.observe(cachedEnvelope);
+  const payload = `id: ${cachedEnvelope.version}\nevent: state\ndata: ${JSON.stringify(cachedEnvelope)}\n\n`;
   for (const client of sseClients) {
     try {
       client.write(payload);
@@ -55,7 +61,7 @@ export function broadcastState(envelope) {
   for (const ws of wsClients) {
     try {
       if (ws.readyState === 1) { // OPEN
-        ws.send(JSON.stringify({ event: 'state', data: envelope }));
+        ws.send(JSON.stringify({ event: 'state', data: cachedEnvelope }));
       }
     } catch {
       wsClients.delete(ws);
@@ -235,6 +241,10 @@ export function startAuthoritySync(options={}){
       if (stopped) return;
       try {
         await notifyAuthorityScore(envelope, { baseUrl, secret, timeoutMs: options.scoreTimeoutMs });
+        const current = await refreshAuthorityState(baseUrl);
+        if (current?.state === 'revealed' && scoreIdentity(current) === identity && !current.scoreReady) {
+          throw new Error('Scoring completed but score-ready state is not visible yet');
+        }
         completedScores.add(identity);
         scoreJobs.delete(identity);
       } catch (error) {
@@ -377,7 +387,7 @@ export function createGatewayServer(customQueue = null, options = {}) {
 
     // Cached state endpoint
     if (path === '/gateway/state' && req.method === 'GET') {
-      return sendJson(200, cachedEnvelope);
+      return sendJson(200, stampedEnvelope(cachedEnvelope));
     }
 
     // SSE stream for broadcast
@@ -389,7 +399,7 @@ export function createGatewayServer(customQueue = null, options = {}) {
         'x-request-id': requestId,
         ...cors
       });
-      res.write(`id: ${cachedEnvelope.version}\nevent: state\ndata: ${JSON.stringify(cachedEnvelope)}\n\n`);
+      res.write(`id: ${cachedEnvelope.version}\nevent: state\ndata: ${JSON.stringify(stampedEnvelope(cachedEnvelope))}\n\n`);
       sseClients.add(res);
       globalMetrics.setActiveConnections(sseClients.size + wsClients.size);
       authoritySyncObserver?.clientActivity?.();
@@ -499,6 +509,10 @@ export function createGatewayServer(customQueue = null, options = {}) {
           durationMs: Date.now() - ackStart
         }));
         return sendJson(409, { error: 'Question is not currently open for answers', code: 'QUESTION_NOT_OPEN' });
+      }
+
+      if (cachedEnvelope.openedAt && Date.now() < new Date(cachedEnvelope.openedAt).getTime()) {
+        return sendJson(409, { error: 'Answers have not opened yet', code: 'QUESTION_NOT_STARTED' });
       }
 
       if (cachedEnvelope.deadlineAt && Date.now() > new Date(cachedEnvelope.deadlineAt).getTime()) {

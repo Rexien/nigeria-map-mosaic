@@ -66,7 +66,7 @@ test('revealed state fans out before gateway starts a retried scoring callback',
   resetClients();
   const sessionId = '33333333-3333-4333-8333-333333333333';
   const questionId = '44444444-4444-4444-8444-444444444444';
-  const envelope = createStateEnvelope({ eventId: 'event-score', sessionId, state: 'revealed', version: 6 },
+  let envelope = createStateEnvelope({ eventId: 'event-score', sessionId, state: 'revealed', version: 6 },
     { ...question(questionId), correctOption: 1 });
   setCachedEnvelope(createStateEnvelope({ eventId: 'event-score', sessionId, state: 'lobby', version: 1 }));
   const order = [];
@@ -83,6 +83,10 @@ test('revealed state fans out before gateway starts a retried scoring callback',
       let body = '';
       for await (const chunk of req) body += chunk;
       scoreBodies.push(JSON.parse(body));
+      if (scoreBodies.length === 2) {
+        envelope = createStateEnvelope({ eventId: 'event-score', sessionId, state: 'revealed', version: 6, scoreReady: true },
+          { ...question(questionId), correctOption: 1 });
+      }
       res.writeHead(scoreBodies.length === 1 ? 503 : 200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify(scoreBodies.length === 1 ? { error: 'retry me' } : { scored: true }));
     }
@@ -92,7 +96,9 @@ test('revealed state fans out before gateway starts a retried scoring callback',
   const sync = startAuthoritySync({ baseUrl, secret: 'score-secret', retryBaseMs: 10, reconcileMs: 60000 });
   try {
     await waitFor(() => scoreBodies.length === 2);
+    await waitFor(() => getCachedState().scoreReady === true);
     assert.equal(order[0], 'fanout');
+    assert.ok(order.filter(step => step === 'fanout').length >= 2, 'score readiness must fan out after the answer reveal');
     assert.deepEqual(scoreBodies[0], { sessionId, questionId, version: 6 });
     assert.equal(scoreBodies.length, 2, 'transient scoring failure should retry');
   } finally {

@@ -46,13 +46,13 @@
 
   function handleStateUpdate(newState) {
     if (!newState) return;
-    if (newState.serverNow) {
-      clockOffset = new Date(newState.serverNow).getTime() - Date.now();
-    }
     const isNewer = !currentState || (Number(newState.version || 0) > Number(currentState.version || 0));
     const isCorrection = currentState && (Number(newState.version || 0) === Number(currentState.version || 0)) && (newState.checksum && newState.checksum !== currentState.checksum);
 
     if (isNewer || isCorrection) {
+      if (newState.serverNow) {
+        clockOffset = new Date(newState.serverNow).getTime() - Date.now();
+      }
       currentState = newState;
       listeners.state.forEach(fn => {
         try { fn(newState); } catch (e) { console.error(e); }

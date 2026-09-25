@@ -29,6 +29,7 @@ const code = () => `${token(3).slice(0, 4)}-${token(3).slice(0, 4)}`.toUpperCase
 const routeOf = e => (e.path || '').replace(/^.*\/api\/?/, '').replace(/^\/+|\/+$/g, '');
 const publicReads = createReadCache(), rankingReads = createReadCache();
 const rateLimit = createRateLimiter();
+const QUESTION_START_LEAD_MS = 5000;
 const clientIp = e => e.headers?.['x-real-ip'] || e.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || e.headers?.['x-nf-client-connection-ip'] || 'local';
 const gatewayBase = () => String(process.env.PUBLIC_GATEWAY_URL || '').replace(/\/$/, '');
 const transitions = {
@@ -382,6 +383,7 @@ async function internalScore(e) {
   }
   await computeAndPersistSnapshots(sessionId, version);
   recordRevealStage(session, 'scoring_complete');
+  publicReads.clear();
   rankingReads.clear();
   return json(200, { scored: true, idempotent: false, version });
 }
@@ -551,6 +553,7 @@ async function buildLiveState(skipAuto = false) {
     currentClue: s.current_clue,
     openedAt: s.opened_at,
     deadlineAt: s.deadline_at,
+    scoreReady: s.state === 'revealed' ? await scoreSnapshotReady(s.id, Number(s.version)) : false,
     responseCount: 0,
     serverNow: new Date().toISOString()
   }, question);
@@ -584,11 +587,12 @@ async function bootstrap() {
 
 async function me(e) {
   const p = await participant(e);
-  const snapshot = (await db(`participant_score_snapshots?participant_id=eq.${p.id}&select=rank,scores,stamps&order=created_at.desc&limit=1`))[0] || null;
+  const snapshot = (await db(`participant_score_snapshots?participant_id=eq.${p.id}&select=rank,scores,stamps,snapshot_version&order=snapshot_version.desc&limit=1`))[0] || null;
   const defaults = { day1: 0, day2: 0, combined: 0, passport: 0, decode: 0, total: 0 };
   return json(200, {
     participant: { id: p.id, alias: p.alias, registeredAt: p.registered_at, isSpectator: Boolean(p.is_spectator) },
     scores: snapshot?.scores || defaults,
+    snapshotVersion: snapshot?.snapshot_version || null,
     rank: snapshot?.rank || '-',
     stamps: snapshot?.stamps || []
   });
@@ -603,6 +607,9 @@ async function answer(e) {
   const s = (await db(`live_sessions?id=eq.${body.sessionId}&event_id=eq.${p.event_id}&select=*`))[0];
   if(!s || s.current_question_id!==body.questionId)return json(409,{error:'Answer does not match the active question',code:'SESSION_MISMATCH'});
   if (!s || s.state !== 'open' || !s.current_question_id) return json(409, { error: 'No question is open for answers right now' });
+  if (s.opened_at && Date.now() < new Date(s.opened_at).getTime()) {
+    return json(409, { error: 'Answers have not opened yet', code: 'QUESTION_NOT_STARTED' });
+  }
   if (s.deadline_at && Date.now() > new Date(s.deadline_at).getTime()) {
     await autoRevealSession(s);
     return json(409, { error: 'Answers are closed for this question' });
@@ -950,6 +957,7 @@ async function adminAction(e, admin) {
     });
 
     const now = new Date();
+    const opensAt = new Date(now.getTime() + QUESTION_START_LEAD_MS);
     const after = (await db(`live_sessions?id=eq.${session.id}`, {
       method: 'PATCH',
       body: JSON.stringify({
@@ -957,8 +965,8 @@ async function adminAction(e, admin) {
         current_round_id: q.round_id,
         current_clue: clueNum,
         state: 'open',
-        opened_at: now.toISOString(),
-        deadline_at: new Date(now.getTime() + (q.duration_seconds || 20) * 1000).toISOString(),
+        opened_at: opensAt.toISOString(),
+        deadline_at: new Date(opensAt.getTime() + (q.duration_seconds || 20) * 1000).toISOString(),
         updated_at: now.toISOString(),
         version: session.version + 1
       })
@@ -1082,13 +1090,14 @@ async function adminAction(e, admin) {
   if (b.state === 'open') {
     if (!session.current_question_id) return json(409, { error: 'Select an approved question first.' });
     const q = (await db(`quiz_questions?id=eq.${session.current_question_id}&select=duration_seconds`))[0];
-    patch.opened_at = new Date().toISOString();
-    patch.deadline_at = new Date(Date.now() + (Number(b.durationSeconds) || q?.duration_seconds || 20) * 1000).toISOString();
     await db('live_question_state', {
       method: 'POST',
       prefer: 'resolution=merge-duplicates,return=representation',
       body: JSON.stringify({ session_id: session.id, question_id: session.current_question_id, response_count: 0 })
     });
+    const opensAt = new Date(Date.now() + QUESTION_START_LEAD_MS);
+    patch.opened_at = opensAt.toISOString();
+    patch.deadline_at = new Date(opensAt.getTime() + (Number(b.durationSeconds) || q?.duration_seconds || 20) * 1000).toISOString();
   }
   if (b.state === 'revealed') {
     const after = await finalizeReveal(session);

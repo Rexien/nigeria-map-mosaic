@@ -10,6 +10,8 @@ import {
 import {
   createGatewayServer,
   broadcastState,
+  getCachedState,
+  setCachedEnvelope,
   sseClients,
   resetClients
 } from '../gateway/server.mjs';
@@ -121,6 +123,29 @@ test('NIACTransport manages state lifecycle, monotonic versioning and timer coun
 
   const secondsLeft = Math.max(0, Math.ceil((new Date(deadline).getTime() - Date.now()) / 1000));
   assert.ok(secondsLeft >= 8 && secondsLeft <= 10, `Seconds left should be ~10s, got ${secondsLeft}`);
+});
+
+test('gateway state responses stamp the current time without invalidating the checksum', async () => {
+  const prior = getCachedState();
+  const old = createStateEnvelope({
+    sessionId: 'stale-clock-session', version: 13, state: 'open',
+    openedAt: new Date(Date.now() - 60000).toISOString(),
+    deadlineAt: new Date(Date.now() + 20000).toISOString(),
+    serverNow: new Date(Date.now() - 60000).toISOString()
+  });
+  setCachedEnvelope(old);
+  const server = createGatewayServer();
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/gateway/state`);
+    const state = await response.json();
+    assert.equal(response.status, 200);
+    assert.ok(Math.abs(new Date(state.serverNow).getTime() - Date.now()) < 2000);
+    assert.equal(verifyStateEnvelope(state), true);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    setCachedEnvelope(prior);
+  }
 });
 
 test('gateway server handles real HTTP SSE streams, health checks, and broadcast authorization', async () => {

@@ -95,6 +95,8 @@ test('deadline reveals after drain without waiting for scoring, then gates leade
     assert.equal(session.state, 'revealed');
     assert.deepEqual(timeline, ['locked', 'drain', 'persist', 'broadcast']);
     assert.equal(snapshotWrites, 0, 'reveal must not start the expensive scoring reads or writes');
+    const pendingState = await handler({ httpMethod: 'GET', path: '/api/state' });
+    assert.equal(JSON.parse(pendingState.body).scoreReady, false);
 
     const adminToken = createAdminSession();
     const blocked = await handler({
@@ -117,6 +119,8 @@ test('deadline reveals after drain without waiting for scoring, then gates leade
     const score = await scoreRequest();
     assert.equal(score.statusCode, 200, score.body);
     assert.deepEqual(timeline.slice(-2), ['participant-snapshot', 'leaderboard-snapshot']);
+    const completedState = await handler({ httpMethod: 'GET', path: '/api/state' });
+    assert.equal(JSON.parse(completedState.body).scoreReady, true);
 
     const duplicate = await scoreRequest();
     assert.equal(JSON.parse(duplicate.body).idempotent, true);

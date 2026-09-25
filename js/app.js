@@ -17,7 +17,7 @@
     const isDecodePrep=s.activity==='decode'&&s.state==='preparing'&&Boolean(s.question);
     const visible=s.question&&(['open','locked','revealed','leaderboard'].includes(s.state)||isDecodePrep);
     if(!visible){card.classList.add('hidden');return}
-    const isOpen=s.state==='open';card.classList.remove('hidden');badge.classList.toggle('is-live',isOpen||isDecodePrep);badgeText.textContent=isOpen?'Live now':isDecodePrep?`Clue ${s.question.clueNumber||1}`:'On the main screen';activity.textContent=s.question.title||(s.activity==='decode'?'Decode the State':'Naija Passport Challenge');question.textContent=s.question.clue||s.question.question;status.textContent=isOpen?'Answers are open — tap below to choose yours.':isDecodePrep?`Clue ${s.question.clueNumber||1} of 3 is on the main screen. Voting opens after Clue 3.`:s.state==='locked'?'Answers are closed. You can still view the question.':s.state==='revealed'?'The answer has been revealed on the main screen.':'The leaderboard is on the main screen.';link.href='/play';link.textContent=isOpen?'Answer now':isDecodePrep?'View clues':'View question'
+    const isOpen=s.state==='open';card.classList.remove('hidden');badge.classList.toggle('is-live',isOpen||isDecodePrep);badgeText.textContent=isOpen?'Live now':isDecodePrep?`Clue ${s.question.clueNumber||1}`:'On the main screen';activity.textContent=s.question.title||(s.activity==='decode'?'Decode the State':'Naija Passport Challenge');question.textContent=s.question.clue||s.question.question;status.textContent=isOpen?'Question is live — open it to see when answers begin.':isDecodePrep?`Clue ${s.question.clueNumber||1} of 3 is on the main screen. Voting opens after Clue 3.`:s.state==='locked'?'Answers are closed. You can still view the question.':s.state==='revealed'?'The answer has been revealed on the main screen.':'The leaderboard is on the main screen.';link.href='/play';link.textContent=isOpen?'View question':isDecodePrep?'View clues':'View question'
   }
   function applyState(data){
     if(!data)return;
@@ -40,6 +40,7 @@
     finally{stateLoading=false}
   }
   function remaining(s){return Math.max(0,Math.ceil((new Date(s.deadlineAt).getTime()-(Date.now()+clockOffset))/1000))}
+  function startsIn(s){return s?.state==='open'&&s.openedAt?Math.max(0,Math.ceil((new Date(s.openedAt).getTime()-(Date.now()+clockOffset))/1000)):0}
   function localPreview(){
     if(!['127.0.0.1','localhost'].includes(location.hostname))return null;
     const mode=new URLSearchParams(location.search).get('preview');if(!mode)return null;
@@ -55,6 +56,7 @@
     if(mode==='passport-standby'||mode==='decode-standby')return{data:{activity:mode==='decode-standby'?'decode':'passport',screenMode:'activity',state:'lobby',question:null,responseCount:0,serverNow:new Date().toISOString()},answerIndex:null};
 
     // Passport states
+    if(mode==='passport-starting')return{data:{activity:'passport',screenMode:'activity',state:'open',question:basePassport,openedAt:new Date(now+1800).toISOString(),deadlineAt:new Date(now+21800).toISOString(),responseCount:0,serverNow:new Date().toISOString()},answerIndex:null};
     if(mode==='passport-text'||mode==='text')return{data:{activity:'passport',screenMode:'activity',state:'open',question:basePassport,deadlineAt:new Date(now+25000).toISOString(),responseCount:12,serverNow:new Date().toISOString()},answerIndex:null};
     if(mode==='passport-image'||mode==='image')return{data:{activity:'passport',screenMode:'activity',state:'open',question:qMediaPassport,deadlineAt:new Date(now+25000).toISOString(),responseCount:18,serverNow:new Date().toISOString()},answerIndex:null};
     if(mode==='passport-answered'||mode==='answered')return{data:{activity:'passport',screenMode:'activity',state:'open',question:basePassport,deadlineAt:new Date(now+20000).toISOString(),responseCount:30,serverNow:new Date().toISOString()},answerIndex:0};
@@ -138,7 +140,8 @@
       priorOption,
       priorConfirmed,
       priorSpectator,
-      isSpectator
+      isSpectator,
+      Boolean(s.scoreReady)
     ].join('|');
 
     if(playKey === lastPlayKey){
@@ -173,7 +176,7 @@
       </div>` : playMediaHTML(q, revealed);
 
     const questionNumberLabel = isDecode ? 'Mystery State' : (q.order ? `Question ${q.order}` : 'Trivia');
-    const timerHTML = !isSpectator && s.state === 'open' ? `<strong class="timer" id="timer" aria-label="Seconds remaining">${remaining(s)}</strong>` : '';
+    const timerHTML = !isSpectator && s.state === 'open' ? `<strong class="timer" id="timer" aria-label="${startsIn(s)?'Seconds until answers open':'Seconds remaining'}">${startsIn(s)||remaining(s)}</strong>` : '';
 
     root.innerHTML=`<div class="panel play-panel ${isDecode?'is-decode-play':''}">
       <div class="question-meta">
@@ -185,7 +188,7 @@
       ${revealed?`<div class="notice result-notice ${isCorrect?'result-correct':'result-wrong'}" role="status"><strong>${resultTitle}</strong><span>${resultCopy}</span><small>${escape(q.explanation||'')}</small></div>`:''}
       ${decodeCluesHTML}
       <div class="answers">
-        ${q.options.map((o,i)=>`<button class="answer ${prior?.optionIndex===i?'selected':''} ${prior?.confirmed?'confirmed':''} ${revealed&&q.correctOption===i?'correct':''} ${revealed&&answered&&prior.optionIndex===i&&!isCorrect?'incorrect':''}" data-option="${i}" ${s.state!=='open'||prior?'disabled':''}>${String.fromCharCode(65+i)}. ${escape(o)}${isDecode?' State':''}</button>`).join('')}
+        ${q.options.map((o,i)=>`<button class="answer ${prior?.optionIndex===i?'selected':''} ${prior?.confirmed?'confirmed':''} ${revealed&&q.correctOption===i?'correct':''} ${revealed&&answered&&prior.optionIndex===i&&!isCorrect?'incorrect':''}" data-option="${i}" ${s.state!=='open'||prior||startsIn(s)>0?'disabled':''}>${String.fromCharCode(65+i)}. ${escape(o)}${isDecode?' State':''}</button>`).join('')}
       </div>
       ${isDecode ? `
         <details class="decode-map-drawer">
@@ -193,7 +196,7 @@
           <div id="play-map-container"></div>
         </details>
       ` : ''}
-      <p id="answer-message" class="muted" aria-live="polite">${prior?.confirmed?(prior?.spectator||isSpectator?'Answer recorded · Spectator mode':'Answer received — locked in.'):prior&&s.state==='open'?'Connection interrupted — keeping your answer and retrying.':s.state==='open'?(isSpectator?'Choose one answer for interactive practice (Spectator mode).':'Select your answer above. Once received, it cannot be changed.'):'Answers are closed.'}</p>
+      <p id="answer-message" class="muted" aria-live="polite">${prior?.confirmed?(prior?.spectator||isSpectator?'Answer recorded · Spectator mode':'Answer received — locked in.'):prior&&s.state==='open'?'Connection interrupted — keeping your answer and retrying.':s.state==='open'?(startsIn(s)>0?`Answers open in ${startsIn(s)} seconds — get ready.`:isSpectator?'Choose one answer for interactive practice (Spectator mode).':'Select your answer above. Once received, it cannot be changed.'):'Answers are closed.'}</p>
       <p id="personal-live-score" class="muted"></p>
     </div>`;
 
@@ -220,7 +223,7 @@
           selectedOption:prior?.optionIndex??null,
           correctOption:revealed?q.correctOption:null,
           isRevealed:revealed,
-          interactive:s.state==='open'&&!prior,
+          interactive:s.state==='open'&&!prior&&startsIn(s)===0,
           onSelect:(idx)=>submitAnswer(idx,s)
         });
       }
@@ -228,17 +231,22 @@
 
     $$('.answer',root).forEach(b=>b.addEventListener('click',()=>submitAnswer(Number(b.dataset.option),s),{once:true}));
     startClock(s, isSpectator);
-    if(s.state==='revealed'){
+    if(s.state==='revealed'&&!s.scoreReady){
       const score=$('#personal-live-score',root);
       if(score)score.textContent=isSpectator?'Spectator mode · Interactive practice only':'Scores are updating…';
     }else updateLiveScore(q.activity, revealed);
     if(prior&&!prior.confirmed&&s.state==='open')retryPending(prior,s);
   }
-  async function updateLiveScore(activity, force = false){
+  async function updateLiveScore(activity, force = false, attempt = 0, expectedVersion = currentState?.version){
+    if(currentState?.version !== expectedVersion)return;
     const scoreKey = `${activity}|${currentState?.state}|${currentState?.question?.id}`;
     if(!force && lastScoreFetchKey === scoreKey && currentState?.state !== 'revealed') return;
     try{
       const d=await api().request('/me'),el=$('#personal-live-score');
+      if(currentState?.version !== expectedVersion)return;
+      if(currentState?.state === 'revealed' && currentState.scoreReady && Number(d.snapshotVersion) < Number(expectedVersion)){
+        throw new Error('Score snapshot is still catching up');
+      }
       lastScoreFetchKey = scoreKey;
       if(el){
         if(el.parentElement?.querySelector('.notice'))el.parentElement.querySelector('h1')?.after(el);
@@ -255,14 +263,45 @@
           el.textContent=`Event total: ${total.toLocaleString()} points · Current rank: #${d.rank}`;
         }
       }
-    }catch{}
+    }catch{
+      if(currentState?.version !== expectedVersion || currentState?.state !== 'revealed' || !currentState.scoreReady)return;
+      if(attempt < 3){
+        setTimeout(()=>updateLiveScore(activity,true,attempt+1,expectedVersion),1200*(attempt+1));
+      }else{
+        const el=$('#personal-live-score');
+        if(el)el.textContent='Your score could not load. Refresh this page to try again.';
+      }
+    }
   }
   function startClock(s, isSpectator = false){
     clearInterval(clockTimer);
-    if(isSpectator) return;
+    let wasStarting = null;
     const tick=()=>{
-      const left=remaining(s),el=$('#timer');
-      if(el)el.textContent=left;
+      const left=remaining(s),openingIn=startsIn(s),starting=openingIn>0,el=$('#timer');
+      if(el){
+        el.textContent=starting?openingIn:left;
+        el.setAttribute('aria-label',starting?'Seconds until answers open':'Seconds remaining');
+      }
+      const displayState=$('.display-state');
+      if(displayState&&s.state==='open'&&displayState.lastChild)displayState.lastChild.textContent=starting?'Get ready · answers opening soon':'Answers open';
+      if(s.state==='open'&&wasStarting!==starting){
+        const prior=JSON.parse(localStorage.getItem(`niac-answer-${s.question.id}`)||'null');
+        $$('.answer').forEach(b=>b.disabled=starting||left===0||Boolean(prior));
+        const note=$('#answer-message');
+        if(note&&!prior)message(note,starting?`Answers open in ${openingIn} seconds — get ready.`:isSpectator?'Choose one answer for interactive practice (Spectator mode).':'Select your answer above. Once received, it cannot be changed.');
+        const mapWrap=$('#play-map-container');
+        if(!starting&&mapWrap&&window.NigeriaStatesMap&&!prior){
+          window.NigeriaStatesMap.renderMap({container:mapWrap,options:s.question.options,selectedOption:null,interactive:true,onSelect:(idx)=>submitAnswer(idx,s)});
+        }
+      }else if(starting){
+        const note=$('#answer-message');
+        if(note&&!localStorage.getItem(`niac-answer-${s.question.id}`))message(note,`Answers open in ${openingIn} seconds — get ready.`);
+      }
+      if(wasStarting&& !starting){
+        const prior=JSON.parse(localStorage.getItem(`niac-answer-${s.question.id}`)||'null');
+        if(prior&&!prior.confirmed)retryPending(prior,s);
+      }
+      wasStarting=starting;
       if(left===0&&s.state==='open'){
         $$('.answer').forEach(b=>b.disabled=true);
         const note=$('#answer-message');
@@ -273,6 +312,7 @@
     clockTimer=setInterval(tick,250);
   }
   async function submitAnswer(optionIndex,s){
+    if(startsIn(s)>0){message($('#answer-message'),'Answers have not opened yet. Get ready.');return}
     const buttons=$$('.answer');if(buttons.some(button=>button.disabled))return;
     buttons.forEach((b,i)=>{b.classList.toggle('selected',i===optionIndex);b.disabled=true});
     message($('#answer-message'),'Sending your answer…');
@@ -286,7 +326,7 @@
     // Update structural key so duplicate state does not wipe selection
     const clueNum = s.question.clueNumber||s.currentClue||1;
     const isSpectator = Boolean(api().getProfile()?.isSpectator);
-    lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, optionIndex, false, false, isSpectator].join('|');
+    lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, optionIndex, false, false, isSpectator, Boolean(s.scoreReady)].join('|');
 
     try{
       const res=await api().request('/answers',{method:'POST',body:{sessionId:s.sessionId,questionId:s.question.id,optionIndex,idempotencyKey:pending.idempotencyKey}});
@@ -295,7 +335,7 @@
       localStorage.setItem(key,JSON.stringify(pending));
       // In-place confirmation update
       buttons.forEach(b=>{if(b.classList.contains('selected'))b.classList.add('confirmed')});
-      lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, optionIndex, true, Boolean(pending.spectator), isSpectator].join('|');
+      lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, optionIndex, true, Boolean(pending.spectator), isSpectator, Boolean(s.scoreReady)].join('|');
       message($('#answer-message'),pending.spectator?'Practice answer only · Spectator mode':'Answer received — locked in.');
     }
     catch(err){
@@ -306,7 +346,7 @@
     }
   }
   async function retryPending(pending,s){
-    const key=`niac-answer-${s.question.id}`;if(retrying.has(key)||remaining(s)<=0)return;retrying.add(key);
+    const key=`niac-answer-${s.question.id}`;if(retrying.has(key)||remaining(s)<=0||startsIn(s)>0)return;retrying.add(key);
     try{
       const res=await api().request('/answers',{method:'POST',body:{sessionId:s.sessionId,questionId:s.question.id,optionIndex:pending.optionIndex,idempotencyKey:pending.idempotencyKey}});
       pending.confirmed=true;if(res?.spectator||api().getProfile()?.isSpectator)pending.spectator=true;
@@ -314,7 +354,7 @@
       $$('.answer').forEach(b=>{if(b.classList.contains('selected'))b.classList.add('confirmed')});
       const clueNum = s.question.clueNumber||s.currentClue||1;
       const isSpectator = Boolean(api().getProfile()?.isSpectator);
-      lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, pending.optionIndex, true, Boolean(pending.spectator), isSpectator].join('|');
+      lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, pending.optionIndex, true, Boolean(pending.spectator), isSpectator, Boolean(s.scoreReady)].join('|');
       message($('#answer-message'),pending.spectator?'Answer recorded · Spectator mode':'Answer confirmed by the server.');
     }catch(err){
       if(err.code==='ANSWER_LATE'||err.code==='QUESTION_NOT_OPEN')localStorage.removeItem(key);

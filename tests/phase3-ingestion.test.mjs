@@ -178,6 +178,7 @@ test('gateway answer ingress: rejects unauth, validates question barriers and en
   setCachedEnvelope(createStateEnvelope({
     state: 'open',
     sessionId: 'sess-open-1',
+    openedAt: new Date(Date.now() + 5000).toISOString(),
     deadlineAt: new Date(Date.now() + 15000).toISOString(),
     version: 2
   }, {
@@ -186,6 +187,26 @@ test('gateway answer ingress: rejects unauth, validates question barriers and en
     options: ['A', 'B', 'C', 'D'],
     category: 'culture'
   }));
+
+  const earlyRes = await new Promise(resolve => {
+    const req = http.request({
+      host: '127.0.0.1', port, path: '/gateway/answers', method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${validToken}` }
+    }, res => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(body) }));
+    });
+    req.end(JSON.stringify({ questionId: 'q-active', optionIndex: 2, idempotencyKey: '00000000-0000-4000-8000-000000000002' }));
+  });
+  assert.equal(earlyRes.status, 409);
+  assert.equal(earlyRes.body.code, 'QUESTION_NOT_STARTED');
+  assert.equal(queue.getQueueDepth(), 0);
+  setCachedEnvelope(createStateEnvelope({
+    state: 'open', sessionId: 'sess-open-1',
+    openedAt: new Date(Date.now() - 1000).toISOString(),
+    deadlineAt: new Date(Date.now() + 15000).toISOString(), version: 2
+  }, { id: 'q-active', question: 'Active question?', options: ['A', 'B', 'C', 'D'], category: 'culture' }));
 
   const acceptedRes = await new Promise(resolve => {
     const req = http.request({
