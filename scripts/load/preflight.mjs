@@ -5,7 +5,10 @@ export async function preflight(env=process.env, request=fetch) {
   const base=new URL(env.NIAC_BASE_URL || 'https://niaclive-git-feature-admin-pin-auth-zamijudes-projects.vercel.app');
   const gateway=new URL(env.NIAC_GATEWAY_URL || 'https://92.4.146.91.sslip.io');
   if(base.protocol!=='https:' || gateway.protocol!=='https:')throw new Error('HTTPS targets required');
-  if(base.hostname==='niaclive.vercel.app')throw new Error('Production is not an authorized load target');
+  if (base.hostname === 'niaclive.vercel.app' &&
+      (env.NIAC_ALLOW_PRODUCTION_REHEARSAL !== 'true' || env.CONFIRM_QUIET_WINDOW !== 'true')) {
+    throw new Error('Production rehearsal requires both explicit target and quiet-window confirmations');
+  }
   const blockers=[];
   const automatedBlockers=[];
   const checks=[];
@@ -26,10 +29,13 @@ export async function preflight(env=process.env, request=fetch) {
   const health=await get(gateway,'/gateway/health');
   const state=await get(gateway,'/gateway/state');
   if(bootstrap) {
-    if(bootstrap.transport?.gatewayAnswer!==`${gateway.origin}/gateway/answers`)blockAutomated('Preview does not advertise the expected answer gateway');
-    if(bootstrap.transport?.gatewaySse!==`${gateway.origin}/gateway/stream`)blockAutomated('Preview does not advertise the expected SSE gateway');
+    if(bootstrap.transport?.gatewayAnswer!==`${gateway.origin}/gateway/answers`)blockAutomated('Authority does not advertise the expected answer gateway');
+    if(bootstrap.transport?.gatewaySse!==`${gateway.origin}/gateway/stream`)blockAutomated('Authority does not advertise the expected SSE gateway');
+    if(state && (bootstrap.state?.sessionId!==state.sessionId || bootstrap.state?.eventId!==state.eventId || Number(bootstrap.state?.version)!==Number(state.version))) {
+      blockAutomated('Authority and gateway disagree on the active session/version');
+    }
   } else {
-    blockAutomated('Preview bootstrap could not be verified');
+    blockAutomated('Authority bootstrap could not be verified');
   }
   if(health) {
     if(!health.durableSinkConfigured)blockAutomated('Gateway durable sink is not configured');

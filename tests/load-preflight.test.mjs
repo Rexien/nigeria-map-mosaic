@@ -21,20 +21,27 @@ test('load preflight does not follow protection redirects or send bypass secret 
   assert.ok(!JSON.stringify(report).includes('fixture-secret'));
 });
 
-function healthyResponses({connectedClients=0,currentState='leaderboard',queueDepth=0}={}) {
-  const preview='https://niaclive-git-codex-load-reliability-zamijudes-projects.vercel.app';
+function healthyResponses({connectedClients=0,currentState='leaderboard',queueDepth=0,baseUrl='https://niaclive-git-codex-load-reliability-zamijudes-projects.vercel.app'}={}) {
   const gateway='https://92.4.146.91.sslip.io';
   return async url=>{
     const target=new URL(url);
-    if(target.origin===preview)return Response.json({transport:{
+    if(target.origin===baseUrl)return Response.json({state:{eventId:'event-1',sessionId:'session-1',version:7},transport:{
       gatewayAnswer:`${gateway}/gateway/answers`,gatewaySse:`${gateway}/gateway/stream`
     }});
     if(target.pathname==='/gateway/health')return Response.json({
       durableSinkConfigured:true,queueDepth,connectedClients,currentState
-    },{headers:{'access-control-allow-origin':preview}});
-    return Response.json({state:currentState,version:7},{headers:{'access-control-allow-origin':preview}});
+    },{headers:{'access-control-allow-origin':baseUrl}});
+    return Response.json({eventId:'event-1',sessionId:'session-1',state:currentState,version:7},{headers:{'access-control-allow-origin':baseUrl}});
   };
 }
+
+test('production preflight requires both explicit confirmations and matching gateway state',async()=>{
+  const baseUrl='https://niaclive.vercel.app';
+  const env={NIAC_BASE_URL:baseUrl,NIAC_ALLOW_PRODUCTION_REHEARSAL:'true',CONFIRM_QUIET_WINDOW:'true'};
+  const safe=await preflight(env,healthyResponses({baseUrl}));
+  assert.equal(safe.automatedReady,true);
+  await assert.rejects(preflight({...env,CONFIRM_QUIET_WINDOW:'false'},()=>{throw new Error('unexpected request');}),/confirmations/);
+});
 
 test('load preflight is automated-ready only when the gateway has no listeners, open question, or queued writes',async()=>{
   const env={NIAC_BASE_URL:'https://niaclive-git-codex-load-reliability-zamijudes-projects.vercel.app'};

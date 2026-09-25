@@ -12,6 +12,63 @@ import { verifyDurableAnswers } from './durable.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+export function selectApprovedQuestions(questions, questionMode = 'first-approved') {
+  const approved = questions.filter(q =>
+    (q.reviewStatus === 'approved' || q.review_status === 'approved') &&
+    !(q.isVoid ?? q.is_void ?? false)
+  );
+  if (questionMode === 'first-approved') return approved;
+  if (questionMode === 'open-image') {
+    return approved.filter(q => q.media?.src && q.media?.timing === 'question');
+  }
+  throw new Error(`Unknown question mode: ${questionMode}`);
+}
+
+export async function fetchQuestionImageBurst({ assetUrl, clientCount, headers = {}, fetchImpl = fetch }) {
+  const results = await Promise.all(Array.from({ length: clientCount }, async () => {
+    const startedAt = performance.now();
+    try {
+      const response = await fetchImpl(assetUrl, { headers, signal: AbortSignal.timeout(15000) });
+      const bytes = await response.arrayBuffer();
+      return {
+        ok: response.ok && (response.headers.get('content-type') || '').toLowerCase().startsWith('image/'),
+        status: response.status,
+        durationMs: performance.now() - startedAt,
+        bytes: bytes.byteLength
+      };
+    } catch (error) {
+      return { ok: false, status: 0, durationMs: performance.now() - startedAt, bytes: 0, error: error.message };
+    }
+  }));
+  const latencies = computeLatencyPercentiles(results.map(r => r.durationMs));
+  return {
+    requested: clientCount,
+    succeeded: results.filter(r => r.ok).length,
+    failed: results.filter(r => !r.ok).length,
+    totalBytes: results.reduce((sum, r) => sum + r.bytes, 0),
+    statuses: results.reduce((counts, r) => ({ ...counts, [r.status]: (counts[r.status] || 0) + 1 }), {}),
+    latencies
+  };
+}
+
+export async function waitForAnswerStart(openedAt, deadlineAt, burstSeconds, now = Date.now, sleep = ms => new Promise(resolve => setTimeout(resolve, ms))) {
+  const openMs = new Date(openedAt).getTime();
+  const deadlineMs = new Date(deadlineAt).getTime();
+  if (!Number.isFinite(openMs) || !Number.isFinite(deadlineMs) || deadlineMs <= openMs) {
+    throw new Error('Invalid scheduled question start or deadline');
+  }
+  const waitMs = Math.max(0, openMs - now() + 150);
+  if (waitMs) await sleep(waitMs);
+  if (deadlineMs - now() < burstSeconds * 1000 + 4000) {
+    throw new Error('Insufficient remaining answer window after scheduled start');
+  }
+  return { scheduledOpenedAt: openedAt, waitedMs: waitMs, dispatchAt: new Date(now()).toISOString() };
+}
+
+export function scoreSnapshotMatches(data, revealedVersion) {
+  return Number.isFinite(Number(data?.snapshotVersion)) && Number(data.snapshotVersion) >= Number(revealedVersion);
+}
+
 export async function runTier(options = {}) {
   const env = options.env || process.env;
   const baseUrl = (options.baseUrl || env.NIAC_BASE_URL || 'https://niaclive-git-feature-admin-pin-auth-zamijudes-projects.vercel.app').replace(/\/$/, '');
@@ -34,6 +91,7 @@ export async function runTier(options = {}) {
   const duplicatePercent = Number(options.duplicatePercent || 10);
   const rounds = Number(options.rounds || 1);
   const fanoutAbortMs = Number(options.fanoutAbortMs || 2000);
+  const questionMode = options.questionMode || 'first-approved';
   const adminPin = options.adminPin || env.ADMIN_PIN;
   if(!adminPin)throw new Error('ADMIN_PIN is required');
   if(!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Refusing load without durable verification credentials');
@@ -80,16 +138,17 @@ export async function runTier(options = {}) {
   const statusData = await statusRes.json();
   const sessionId = statusData.session?.id;
   const questions = statusData.questions || [];
-  const approvedQuestions = questions.filter(q => 
-    (q.reviewStatus === 'approved' || q.review_status === 'approved') && 
-    !(q.isVoid ?? q.is_void ?? false)
-  );
+  const approvedQuestions = selectApprovedQuestions(questions, questionMode);
 
-  if (!approvedQuestions.length) throw new Error('No approved questions found');
+  if (!approvedQuestions.length) {
+    if (questionMode === 'open-image') throw new Error('No approved question has an image shown while answers are open');
+    throw new Error('No approved questions found');
+  }
   if(rounds>approvedQuestions.length)throw new Error('Cannot reuse questions for the same participant identities');
-  console.log(`  Found ${approvedQuestions.length} approved questions for live rounds.`);
+  console.log(`  Found ${approvedQuestions.length} approved questions for live rounds (${questionMode}).`);
 
   const roundReports = [];
+  let lastRevealVersion = null;
 
   // 4. Execute Rounds
   for (let r = 0; r < rounds; r++) {
@@ -117,8 +176,18 @@ export async function runTier(options = {}) {
     const openVersion = openData.session.version;
     observer.commandStarts.set(openVersion,commandStartedAt);
     if(openData.session.id!==sessionId)throw new Error('Session changed during test');
+    const openedAt = openData.session.opened_at;
     const deadlineAt = new Date(openData.session.deadline_at).getTime();
-    console.log(`  ✓ Question Opened (v${openVersion}). Deadline: ${openData.session.deadline_at}`);
+    console.log(`  ✓ Question Prepared (v${openVersion}). Answers open: ${openedAt}; deadline: ${openData.session.deadline_at}`);
+
+    let imageBurst = null;
+    if (currentQ.media?.src && currentQ.media?.timing === 'question') {
+      const assetUrl = new URL(currentQ.media.src, baseUrl).toString();
+      console.log(`  Loading question image for ${participants.length} simulated clients: ${assetUrl}`);
+      imageBurst = await fetchQuestionImageBurst({ assetUrl, clientCount: participants.length, headers });
+      console.log(`  Image fetches: ${imageBurst.succeeded}/${imageBurst.requested}; p95 ${imageBurst.latencies.p95}ms; ${imageBurst.totalBytes} bytes transferred`);
+      if (imageBurst.failed) throw new Error(`Question image failed to load for ${imageBurst.failed}/${imageBurst.requested} simulated clients`);
+    }
 
     // Wait up to the acceptance boundary for every listener, then evaluate latency.
     const fanout = await observer.waitForFanout(openVersion,participants.length,3000);
@@ -126,7 +195,8 @@ export async function runTier(options = {}) {
       console.log(`  ✓ Fanout Receipt: ${fanout.receivedCount}/${participants.length} streams (p50: ${fanout.p50Ms}ms, p95: ${fanout.p95Ms}ms)`);
     }
     if(!fanout || fanout.receivedCount!==participants.length || fanout.p99Ms>fanoutAbortMs)throw new Error('Fanout gate failed; no answer burst sent');
-    if(deadlineAt-Date.now()<burstSeconds*1000+4000)throw new Error('Insufficient remaining answer window');
+    const startTiming = await waitForAnswerStart(openedAt, openData.session.deadline_at, burstSeconds);
+    console.log(`  ✓ Scheduled start reached; waited ${startTiming.waitedMs}ms before submitting`);
 
     // Schedule and dispatch answers
     console.log(`  Ingesting answers across ${burstSeconds}s burst window...`);
@@ -199,6 +269,8 @@ export async function runTier(options = {}) {
 
     // Poll until revealed and queue drained
     let revealed = false;
+    let revealVersion = null;
+    let revealSeenAt = null;
     let pollCount = 0;
     while (!revealed && pollCount < 15) {
       await new Promise(res => setTimeout(res, 1000));
@@ -206,13 +278,18 @@ export async function runTier(options = {}) {
       const stateRes = await fetch(`${baseUrl}/api/state`, { headers });
       if (stateRes.ok) {
         const stateData = await stateRes.json();
-        if (stateData.state === 'revealed') revealed = true;
+        if (stateData.state === 'revealed' && stateData.question?.id === currentQ.id) {
+          revealed = true;
+          revealVersion = Number(stateData.version);
+          revealSeenAt = Date.now();
+        }
       }
     }
 
     if (!revealed) {
       throw new Error('Automatic reveal failed; stopped without forcing success');
     }
+    lastRevealVersion = revealVersion;
     const durable=await verifyDurableAnswers(submissionResults,env);
     fs.writeFileSync(path.join(outDir,`round-${r+1}-durable.json`),JSON.stringify(durable,null,2));
     const healthResponse=await fetch(`${gatewayUrl}/gateway/health`,{signal:AbortSignal.timeout(5000)});
@@ -221,8 +298,22 @@ export async function runTier(options = {}) {
     if(!durable.passed || health.queueDepth!==0 || acceptedCount!==participants.length || duplicates.length!==numDuplicates)throw new Error(`Round ${r+1} failed acceptance/durability gates; evidence saved; ladder stopped`);
     // Strict latency goals still fail the final report. Abort the ladder immediately only
     // when latency is severe enough to threaten a live 20-second answer window.
-    if(latencies.p95>3000 || latencies.p99>5000 || latencies.max>8000)throw new Error(`Round ${r+1} exceeded the severe latency abort gate; evidence saved; ladder stopped`);
-    console.log(`  ✓ Answer Revealed.`);
+    const severeLatency = latencies.p95 > 10000 || latencies.p99 > 12000 || latencies.max > 15000;
+    let scoreReadyAt = null;
+    const scoreWaitDeadline = Date.now() + 30000;
+    while (Date.now() < scoreWaitDeadline) {
+      const stateRes = await fetch(`${baseUrl}/api/state`, { headers, signal: AbortSignal.timeout(8000) });
+      if (stateRes.ok) {
+        const stateData = await stateRes.json();
+        if (Number(stateData.version) === revealVersion && stateData.state === 'revealed' && stateData.scoreReady === true) {
+          scoreReadyAt = Date.now();
+          break;
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    if (!scoreReadyAt) throw new Error(`Scores did not become ready for revealed version ${revealVersion} within 30s`);
+    console.log(`  ✓ Answer Revealed; scores ready ${scoreReadyAt - revealSeenAt}ms later.`);
     roundReports.push({
       round: r + 1,
       questionId: currentQ.id,
@@ -231,8 +322,18 @@ export async function runTier(options = {}) {
       duplicateCount: duplicates.length,
       durable,
       fanout,
-      latencies
+      latencies,
+      imageBurst,
+      startTiming,
+      deadlineToRevealMs: revealSeenAt - deadlineAt,
+      revealToScoresReadyMs: scoreReadyAt - revealSeenAt,
+      revealedVersion: revealVersion,
+      severeLatency
     });
+    if (severeLatency) {
+      console.warn(`Round ${r+1} exceeded the severe latency abort gate; no further rounds will open`);
+      break;
+    }
   }
 
   // 5. Post-Reveal Score Lookup Storm (Spread over 2s with retry per LOAD_TEST_PLAN.md)
@@ -250,8 +351,14 @@ export async function runTier(options = {}) {
           headers: { ...headers, 'Authorization': `Bearer ${p.token}` },
           signal:AbortSignal.timeout(8000)
         });
-        await res.arrayBuffer();
-        if (res.status === 200) return {ok:true,durationMs:performance.now()-requestStarted};
+        if (res.status === 200) {
+          const data = await res.json();
+          if (scoreSnapshotMatches(data, lastRevealVersion)) {
+            return {ok:true,durationMs:performance.now()-requestStarted,snapshotVersion:data.snapshotVersion};
+          }
+        } else {
+          await res.arrayBuffer();
+        }
       } catch (err) {
         if (attempt === 0) {
           await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
@@ -279,7 +386,8 @@ export async function runTier(options = {}) {
   const fanoutWithinSla = roundReports.every(r => r.fanout.p95Ms <= 1000 && r.fanout.p99Ms <= 2000);
   const readsWithinSla = readPassCount === participants.length && readLatencies.p95 <= 1000 && readLatencies.p99 <= 2000;
 
-  const passed = zeroLoss && p95WithinSla && fanoutWithinSla && readsWithinSla && roundReports.every(r=>r.durable.passed);
+  const passed = zeroLoss && p95WithinSla && fanoutWithinSla && readsWithinSla &&
+    roundReports.every(r=>r.durable.passed && !r.severeLatency);
 
   const report = {
     runId,
@@ -333,9 +441,10 @@ if (process.argv[1] && process.argv[1].endsWith('run-tier.mjs')) {
   const duplicatePercent = Number(getArg('--duplicate-percent', 10));
   const rounds = Number(getArg('--rounds', 1));
   const fanoutAbortMs = Number(getArg('--fanout-abort-ms', 2000));
+  const questionMode = getArg('--question-mode', 'first-approved');
   const runId = getArg('--run-id', process.env.NIAC_RUN_ID || `rehearsal-${Date.now()}`);
 
-  runTier({ participants, burstSeconds, duplicatePercent, rounds, fanoutAbortMs, runId })
+  runTier({ participants, burstSeconds, duplicatePercent, rounds, fanoutAbortMs, questionMode, runId })
     .then(report => process.exit(report.passed ? 0 : 1))
     .catch(err => {
       console.error('[Run-Tier Error]', err);
