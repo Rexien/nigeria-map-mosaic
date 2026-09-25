@@ -228,7 +228,10 @@
 
     $$('.answer',root).forEach(b=>b.addEventListener('click',()=>submitAnswer(Number(b.dataset.option),s),{once:true}));
     startClock(s, isSpectator);
-    updateLiveScore(q.activity, revealed);
+    if(s.state==='revealed'){
+      const score=$('#personal-live-score',root);
+      if(score)score.textContent=isSpectator?'Spectator mode · Interactive practice only':'Scores are updating…';
+    }else updateLiveScore(q.activity, revealed);
     if(prior&&!prior.confirmed&&s.state==='open')retryPending(prior,s);
   }
   async function updateLiveScore(activity, force = false){
