@@ -539,6 +539,8 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
       assert.equal(state.state, 'open');
       assert.equal(state.question.id, 'q-p1');
       assert.equal(state.question.options.length, 4);
+      assert.ok(Date.parse(state.openedAt) > Date.now(), 'the answer clock starts after question delivery begins');
+      assert.equal(Date.parse(state.deadlineAt) - Date.parse(state.openedAt), 20_000);
 
       // 4. Lock & Reveal
       await action({ state: 'locked' });
@@ -600,6 +602,7 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
       assert.ok(Date.parse(openSessionPatch.opened_at) >= responseCounterReadyAt,
         'Answer-counter preparation must finish before the answer clock starts');
       assert.equal(Date.parse(openSessionPatch.deadline_at) - Date.parse(openSessionPatch.opened_at), 30_000);
+      assert.ok(Date.parse(openSessionPatch.opened_at) > Date.now(), 'Decode voting also gets a visible start lead');
       state = await getState();
       assert.equal(state.state, 'open');
       assert.equal(state.currentClue, 3);

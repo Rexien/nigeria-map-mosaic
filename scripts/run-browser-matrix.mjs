@@ -203,6 +203,31 @@ for (const vp of matrix) {
   await setViewport(vp.width, vp.height, vp.isMobile);
 
   if (vp.isMobile) {
+    await navigate(`http://127.0.0.1:${SERVER_PORT}/play?preview=passport-starting`);
+    const beforeStart = await evaluate(`() => ({
+      timer: Number(document.querySelector('#timer')?.textContent),
+      label: document.querySelector('#timer')?.getAttribute('aria-label'),
+      disabled: [...document.querySelectorAll('.answer')].every(button => button.disabled),
+      note: document.querySelector('#answer-message')?.textContent || ''
+    })`);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    const afterStart = await evaluate(`() => ({
+      timer: Number(document.querySelector('#timer')?.textContent),
+      label: document.querySelector('#timer')?.getAttribute('aria-label'),
+      enabled: [...document.querySelectorAll('.answer')].every(button => !button.disabled),
+      note: document.querySelector('#answer-message')?.textContent || ''
+    })`);
+    const countdownOk = beforeStart.disabled && beforeStart.label === 'Seconds until answers open' &&
+      beforeStart.note.includes('Answers open in') && afterStart.enabled &&
+      afterStart.label === 'Seconds remaining' && afterStart.timer >= 18 && afterStart.timer <= 20;
+    results.push({
+      viewport: `${vp.name} (${vp.width}×${vp.height})`,
+      test: 'Scheduled Question Start (Mobile)',
+      pass: countdownOk,
+      details: `Before: ${beforeStart.timer}s, disabled: ${beforeStart.disabled}; after: ${afterStart.timer}s, enabled: ${afterStart.enabled}`
+    });
+    if (!countdownOk) allPassed = false;
+
     await navigate(`http://127.0.0.1:${SERVER_PORT}/play?preview=decode-voting`);
     const decodeMetrics = await evaluate(`() => {
       const header = document.querySelector('.site-header');

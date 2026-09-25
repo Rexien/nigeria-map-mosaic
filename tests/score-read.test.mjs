@@ -18,9 +18,9 @@ test('personal score reads the latest completed snapshot without depending on th
     }
     if (path.includes('/participant_score_snapshots?')) {
       assert.match(path, /participant_id=eq\.player-1/);
-      assert.match(path, /order=created_at\.desc&limit=1/);
+      assert.match(path, /order=snapshot_version\.desc&limit=1/);
       assert.doesNotMatch(path, /snapshot_version=eq\./);
-      return new Response(JSON.stringify([{ rank: 3, scores: { day1: 800, day2: 0, combined: 800, decode: 0 }, stamps: ['first'] }]), { status: 200 });
+      return new Response(JSON.stringify([{ rank: 3, snapshot_version: 8, scores: { day1: 800, day2: 0, combined: 800, decode: 0 }, stamps: ['first'] }]), { status: 200 });
     }
     throw new Error(`Unexpected request: ${path}`);
   };
@@ -31,6 +31,7 @@ test('personal score reads the latest completed snapshot without depending on th
     const body = JSON.parse(response.body);
     assert.equal(body.scores.combined, 800);
     assert.equal(body.rank, 3);
+    assert.equal(body.snapshotVersion, 8);
     assert.deepEqual(body.stamps, ['first']);
   } finally {
     global.fetch = originalFetch;
