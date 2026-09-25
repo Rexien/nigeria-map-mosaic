@@ -120,6 +120,9 @@ test('admin action show_welcome sets screen_mode to welcome and resets session t
           version: 10
         }]), { status: 200 });
       }
+      if (urlStr.includes('/leaderboard_snapshots?')) {
+        return new Response(JSON.stringify([{ snapshot_version: 10 }]), { status: 200 });
+      }
       if (options.method === 'PATCH' && urlStr.includes('/event_settings?event_id=eq.')) {
         const body = JSON.parse(options.body);
         patchedEvents.push({ type: 'settings', body });
@@ -182,6 +185,9 @@ test('admin action set_settings switches activity, sets screen_mode to activity 
           current_question_id: 'q-passport',
           version: 12
         }]), { status: 200 });
+      }
+      if (urlStr.includes('/leaderboard_snapshots?')) {
+        return new Response(JSON.stringify([{ snapshot_version: 12 }]), { status: 200 });
       }
       if (options.method === 'PATCH' && urlStr.includes('/live_sessions?id=eq.')) {
         const body = JSON.parse(options.body);

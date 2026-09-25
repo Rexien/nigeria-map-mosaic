@@ -80,6 +80,10 @@ function deadlineIdentity(envelope) {
   return `${envelope.sessionId}:${envelope.question.id}:${Number(envelope.version)}`;
 }
 
+function scoreIdentity(envelope) {
+  return envelope?.state === 'revealed' ? deadlineIdentity(envelope) : null;
+}
+
 export async function refreshAuthorityState(baseUrl=process.env.AUTHORITY_BASE_URL||process.env.PUBLIC_EVENT_URL){
   const base=String(baseUrl||'').replace(/\/$/,'');
   if(!base)return null;
@@ -120,6 +124,27 @@ export async function notifyAuthorityDeadline(envelope,options={}){
   return body;
 }
 
+export async function notifyAuthorityScore(envelope, options = {}) {
+  const base = String(options.baseUrl || process.env.AUTHORITY_BASE_URL || process.env.PUBLIC_EVENT_URL || '').replace(/\/$/, '');
+  const secret = String(options.secret || process.env.GATEWAY_ADMIN_SECRET || '');
+  if (!base || !secret || !scoreIdentity(envelope)) throw new Error('Cannot score without authority URL, secret, and revealed state');
+  const response = await fetch(`${base}/api/internal/score`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId: envelope.sessionId, questionId: envelope.question.id, version: Number(envelope.version) }),
+    signal: AbortSignal.timeout(Number(options.timeoutMs || 60000))
+  });
+  let body = {};
+  try { body = await response.json(); } catch {}
+  if (!response.ok) {
+    const error = new Error(body?.error || `Authority score callback failed (${response.status})`);
+    error.status = response.status;
+    error.code = body?.code || null;
+    throw error;
+  }
+  return body;
+}
+
 export function startAuthoritySync(options={}){
   const baseUrl=options.baseUrl||process.env.AUTHORITY_BASE_URL||process.env.PUBLIC_EVENT_URL;
   if(!baseUrl)return null;
@@ -132,6 +157,8 @@ export function startAuthoritySync(options={}){
 
   let deadlineTimer=null;
   let reconcileTimer=null;
+  const scoreJobs = new Map();
+  const completedScores = new Set();
   let stopped=false;
   let reconciling=false;
 
@@ -199,9 +226,38 @@ export function startAuthoritySync(options={}){
     deadlineTimer.unref?.();
   };
 
+  const scheduleScore = envelope => {
+    const identity = scoreIdentity(envelope);
+    if (stopped || !identity || completedScores.has(identity) || scoreJobs.has(identity)) return;
+    const job = { timer: null };
+    scoreJobs.set(identity, job);
+    const run = async attempt => {
+      if (stopped) return;
+      try {
+        await notifyAuthorityScore(envelope, { baseUrl, secret, timeoutMs: options.scoreTimeoutMs });
+        completedScores.add(identity);
+        scoreJobs.delete(identity);
+      } catch (error) {
+        if (stopped) return;
+        if (error.code === 'STALE_SCORE') {
+          scoreJobs.delete(identity);
+          return;
+        }
+        globalMetrics.recordError('AUTHORITY_SCORE');
+        console.error(formatLog('error', 'authority_score_failed', { attempt: attempt + 1, version: envelope.version, error: error.message }));
+        const delay = Math.min(retryBaseMs * (2 ** Math.min(attempt, 4)), retryMaxMs);
+        job.timer = setTimeout(() => { job.timer = null; void run(attempt + 1); }, delay);
+        job.timer.unref?.();
+      }
+    };
+    job.timer = setTimeout(() => { job.timer = null; void run(0); }, 0);
+    job.timer.unref?.();
+  };
+
   const observe=envelope=>{
     if(stopped)return;
     scheduleDeadline(envelope);
+    scheduleScore(envelope);
     scheduleReconcile(envelope);
   };
 
@@ -237,6 +293,8 @@ export function startAuthoritySync(options={}){
       stopped=true;
       clearDeadline();
       clearReconcile();
+      for (const job of scoreJobs.values()) if (job.timer) clearTimeout(job.timer);
+      scoreJobs.clear();
       if(authoritySyncObserver===controller)authoritySyncObserver=null;
     }
   };
@@ -388,6 +446,11 @@ export function createGatewayServer(customQueue = null, options = {}) {
       if(!flusher)return sendJson(503,{error:'Durable answer sink is not configured'});
       let envelope;try{envelope=await readJson(req)}catch(err){return sendJson(err.status||400,{error:err.message})}
       if(!verifyStateEnvelope(envelope)||envelope.state!=='locked')return sendJson(422,{error:'A valid locked state envelope is required'});
+      if(Number(envelope.version)<Number(cachedEnvelope.version)){
+        try{await flusher.drainQueue(Number(process.env.DRAIN_TIMEOUT_MS||10000))}
+        catch(err){return sendJson(503,{error:'Answer queue has not drained',detail:err.message})}
+        return sendJson(200,{drained:true,stale:true,queueDepth:queue.getQueueDepth(),version:cachedEnvelope.version});
+      }
       broadcastState(envelope);
       try{await flusher.drainQueue(Number(process.env.DRAIN_TIMEOUT_MS||10000))}
       catch(err){return sendJson(503,{error:'Answer queue has not drained',detail:err.message})}

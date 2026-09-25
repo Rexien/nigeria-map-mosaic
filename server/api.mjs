@@ -53,6 +53,7 @@ async function dbAll(path) {
 }
 
 async function computeAndPersistSnapshots(sessionId, version) {
+  const startedAt = Date.now();
   const session = (await db(`live_sessions?id=eq.${sessionId}&select=event_id`))[0];
   if (!session) throw new Error('Snapshot session not found');
   const participants = await dbAll(`participants?event_id=eq.${session.event_id}&select=id,alias,registered_at,is_spectator,is_rehearsal`);
@@ -76,16 +77,7 @@ async function computeAndPersistSnapshots(sessionId, version) {
     answers,
     questions
   });
-  await db('leaderboard_snapshots?on_conflict=session_id,activity,snapshot_version', {
-    method: 'POST',
-    prefer: 'resolution=merge-duplicates',
-    body: JSON.stringify(snapshots.leaderboardSnapshots.map(s => ({
-      session_id: s.sessionId,
-      activity: s.activity,
-      snapshot_version: s.snapshotVersion,
-      leaders: s.leaders
-    })))
-  });
+  const computedAt = Date.now();
   for (let start = 0; start < snapshots.participantScoreSnapshots.length; start += 500) {
     await db('participant_score_snapshots?on_conflict=session_id,participant_id,snapshot_version', {
       method: 'POST',
@@ -100,6 +92,45 @@ async function computeAndPersistSnapshots(sessionId, version) {
       })))
     });
   }
+  // The leaderboard row is the completion marker. Never publish it before
+  // every participant score snapshot for this version has been persisted.
+  await db('leaderboard_snapshots?on_conflict=session_id,activity,snapshot_version', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates',
+    body: JSON.stringify(snapshots.leaderboardSnapshots.map(s => ({
+      session_id: s.sessionId,
+      activity: s.activity,
+      snapshot_version: s.snapshotVersion,
+      leaders: s.leaders
+    })))
+  });
+  console.log(formatLog('info', 'snapshot_scoring_complete', {
+    sessionId, snapshotVersion: version,
+    participants: snapshots.stats.totalParticipants,
+    answers: snapshots.stats.totalAnswers,
+    readAndComputeMs: computedAt - startedAt,
+    persistMs: Date.now() - computedAt,
+    totalMs: Date.now() - startedAt
+  }));
+}
+
+async function scoreSnapshotReady(sessionId, version) {
+  const rows = await db(`leaderboard_snapshots?session_id=eq.${encodeURIComponent(sessionId)}&snapshot_version=eq.${version}&activity=eq.passport&select=snapshot_version&limit=1`);
+  return rows.length > 0;
+}
+
+function recordRevealStage(session, stage, at = Date.now(), details = {}) {
+  const deadline = new Date(session.deadline_at || '').getTime();
+  console.log(formatLog('info', 'reveal_path_timing', {
+    sessionId: session.id,
+    questionId: session.current_question_id,
+    version: session.version,
+    stage,
+    at: new Date(at).toISOString(),
+    deadlineAt: Number.isFinite(deadline) ? new Date(deadline).toISOString() : null,
+    sinceDeadlineMs: Number.isFinite(deadline) ? at - deadline : null,
+    ...details
+  }));
 }
 
 async function gatewayCall(path, envelope) {
@@ -167,16 +198,37 @@ async function pushGatewayState() {
 async function finalizeReveal(session) {
   const lockedState = JSON.parse((await buildLiveState(true)).body);
   await gatewayCall('lock-and-drain', lockedState);
+  recordRevealStage(session, 'drain_complete');
   const revealVersion = Number(session.version) + 1;
-  await computeAndPersistSnapshots(session.id, revealVersion);
-  const rows = await db(`live_sessions?id=eq.${session.id}&state=eq.locked`, {
+  const rows = await db(`live_sessions?id=eq.${session.id}&state=eq.locked&version=eq.${session.version}`, {
     method: 'PATCH',
     body: JSON.stringify({ state: 'revealed', updated_at: new Date().toISOString(), version: revealVersion })
   });
-  const revealed = rows[0] || { ...session, state: 'revealed', version: revealVersion };
+  const revealed = rows[0];
+  if (!revealed) {
+    const current = (await db(`live_sessions?id=eq.${session.id}&select=*`))[0];
+    if (current?.state === 'revealed' && Number(current.version) === revealVersion) return current;
+    throw Object.assign(new Error('Reveal state changed during finalization'), { status: 409 });
+  }
+  recordRevealStage(revealed, 'revealed_persisted');
   publicReads.clear();
   rankingReads.clear();
-  await pushGatewayState();
+  let broadcasted = false;
+  if (gatewayBase()) {
+    try {
+      await pushGatewayState();
+      recordRevealStage(revealed, 'reveal_broadcast');
+      broadcasted = true;
+    } catch (error) {
+      console.error(formatLog('error', 'reveal_broadcast_failed', { sessionId: session.id, version: revealVersion, error: error.message }));
+    }
+  }
+  // A missing/unreachable gateway cannot schedule background scoring. Keep
+  // direct mode correct, even though it cannot meet the fast-broadcast target.
+  if (!broadcasted) {
+    await computeAndPersistSnapshots(session.id, revealVersion);
+    recordRevealStage(revealed, 'scoring_complete', Date.now(), { mode: 'direct' });
+  }
   return revealed;
 }
 
@@ -188,6 +240,7 @@ async function autoRevealSession(session) {
       body: JSON.stringify({ state: 'locked', updated_at: new Date().toISOString(), version: Number(session.version) + 1 })
     });
     session = rows[0] || (await db(`live_sessions?id=eq.${session.id}&select=*`))[0];
+    if (rows[0]) recordRevealStage(session, 'locked');
   }
   return session?.state === 'locked' ? finalizeReveal(session) : session;
 }
@@ -276,6 +329,7 @@ async function internalDeadline(e) {
     session = rows[0] || (await db(
       `live_sessions?id=eq.${encodeURIComponent(sessionId)}&select=*`
     ))[0];
+    if (rows[0]) recordRevealStage(session, 'locked');
   }
 
   if (session?.state === 'locked') {
@@ -302,6 +356,34 @@ async function internalDeadline(e) {
     state: session?.state,
     version: session?.version
   });
+}
+
+async function internalScore(e) {
+  const expectedSecret = process.env.GATEWAY_ADMIN_SECRET || '';
+  if (!expectedSecret || !secureSecretMatch(bearer(e), expectedSecret)) {
+    return json(401, { error: 'Unauthorized score callback' });
+  }
+  const body = JSON.parse(e.body || '{}');
+  const sessionId = clean(body.sessionId);
+  const questionId = clean(body.questionId);
+  const version = Number(body.version);
+  if (!sessionId || !questionId || !Number.isInteger(version) || version < 1) {
+    return json(422, { error: 'sessionId, questionId, and integer version are required' });
+  }
+  const session = (await db(`live_sessions?id=eq.${encodeURIComponent(sessionId)}&select=*`))[0];
+  if (!session || session.current_question_id !== questionId) {
+    return json(409, { error: 'Stale score callback', code: 'STALE_SCORE' });
+  }
+  if (await scoreSnapshotReady(sessionId, version)) {
+    return json(200, { scored: true, idempotent: true, version });
+  }
+  if (session.state !== 'revealed' || Number(session.version) !== version) {
+    return json(409, { error: 'Reveal is not ready for scoring', code: 'SCORE_NOT_READY' });
+  }
+  await computeAndPersistSnapshots(sessionId, version);
+  recordRevealStage(session, 'scoring_complete');
+  rankingReads.clear();
+  return json(200, { scored: true, idempotent: false, version });
 }
 
 function bearer(e) {
@@ -692,6 +774,13 @@ async function adminAction(e, admin) {
   ]);
   let session = sessionRows[0];
 
+  const leavingReveal = b.kind === 'show_welcome' || b.kind === 'set_settings' || b.kind === 'open_question' ||
+    b.kind === 'select_question' || (b.state && b.state !== 'revealed');
+  if (session?.state === 'revealed' && leavingReveal &&
+      !(await scoreSnapshotReady(session.id, Number(session.version)))) {
+    return json(409, { error: 'Scores are still updating. Please try again shortly.', code: 'SCORING_PENDING' });
+  }
+
   if (b.kind === 'show_welcome') {
     if (session?.state === 'open') {
       return json(409, { error: 'Wait for the current question to close before showing Welcome.' });
@@ -1002,9 +1091,11 @@ async function adminAction(e, admin) {
     });
   }
   if (b.state === 'revealed') {
-    const lockedState = JSON.parse((await buildLiveState(true)).body);
-    await gatewayCall('lock-and-drain', lockedState);
-    await computeAndPersistSnapshots(session.id, patch.version);
+    const after = await finalizeReveal(session);
+    await audit(admin, ev, 'set_live_state', 'live_session', session.id, session, after);
+    const result = json(200, { session: after });
+    result.gatewayBroadcasted = true;
+    return result;
   }
   const after = (await db(`live_sessions?id=eq.${session.id}`, { method: 'PATCH', body: JSON.stringify(patch) }))[0];
   await audit(admin, ev, 'set_live_state', 'live_session', session.id, session, after);
@@ -1048,6 +1139,8 @@ export async function handler(e) {
         res = await adminLogin(e);
       } else if (method === 'POST' && route === 'internal/deadline') {
         res = await internalDeadline(e);
+      } else if (method === 'POST' && route === 'internal/score') {
+        res = await internalScore(e);
       } else if (method === 'GET' && route === 'admin/lens') {
         const admin = await verifyAdmin(e.headers?.authorization);
         res = await adminLens(e, admin);
@@ -1057,7 +1150,7 @@ export async function handler(e) {
           res = await adminData(e, admin);
         } else if (method === 'POST') {
           res = await adminAction(e, admin);
-          mutated = true;
+          mutated = res.statusCode >= 200 && res.statusCode < 300;
         } else if (method === 'PATCH' && route==='admin/question') {
           res = await updateQuestion(e, admin);
           mutated = true;

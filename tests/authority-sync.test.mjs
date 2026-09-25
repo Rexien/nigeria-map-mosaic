@@ -62,6 +62,46 @@ test('authority sync fetches once at startup and does not continuously poll an i
   }
 });
 
+test('revealed state fans out before gateway starts a retried scoring callback', async () => {
+  resetClients();
+  const sessionId = '33333333-3333-4333-8333-333333333333';
+  const questionId = '44444444-4444-4444-8444-444444444444';
+  const envelope = createStateEnvelope({ eventId: 'event-score', sessionId, state: 'revealed', version: 6 },
+    { ...question(questionId), correctOption: 1 });
+  setCachedEnvelope(createStateEnvelope({ eventId: 'event-score', sessionId, state: 'lobby', version: 1 }));
+  const order = [];
+  const scoreBodies = [];
+  sseClients.add({ write() { order.push('fanout'); } });
+  const authority = createHttpServer(async (req, res) => {
+    if (req.url === '/api/state') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify(envelope));
+    }
+    if (req.url === '/api/internal/score') {
+      order.push('score');
+      assert.equal(req.headers.authorization, 'Bearer score-secret');
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      scoreBodies.push(JSON.parse(body));
+      res.writeHead(scoreBodies.length === 1 ? 503 : 200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify(scoreBodies.length === 1 ? { error: 'retry me' } : { scored: true }));
+    }
+    res.writeHead(404).end();
+  });
+  const baseUrl = await listen(authority);
+  const sync = startAuthoritySync({ baseUrl, secret: 'score-secret', retryBaseMs: 10, reconcileMs: 60000 });
+  try {
+    await waitFor(() => scoreBodies.length === 2);
+    assert.equal(order[0], 'fanout');
+    assert.deepEqual(scoreBodies[0], { sessionId, questionId, version: 6 });
+    assert.equal(scoreBodies.length, 2, 'transient scoring failure should retry');
+  } finally {
+    sync?.stop();
+    await close(authority);
+    resetClients();
+  }
+});
+
 test('open state schedules authenticated deadline callback and retries transient failure before reconciling', async () => {
   resetClients();
   const sessionId = '11111111-1111-4111-8111-111111111111';
