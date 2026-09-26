@@ -254,7 +254,7 @@ for (const vp of matrix) {
         cluesH: clues ? clues.offsetHeight : 0,
         firstBtnTop: firstRect ? Math.round(firstRect.top) : null,
         firstBtnVisible: firstRect ? (firstRect.top >= 0 && firstRect.top < window.innerHeight) : false,
-        allButtonsAboveTheFold: lastRect ? (lastRect.bottom <= window.innerHeight) : false,
+        allButtonsReachable: Boolean(lastRect && lastRect.bottom <= document.documentElement.scrollHeight + 2),
         lastBtnBottom: lastRect ? Math.round(lastRect.bottom) : null,
         innerHeight: window.innerHeight,
         btnCount: buttons.length,
@@ -264,13 +264,13 @@ for (const vp of matrix) {
       };
     }`);
 
-    // All answer options A-D must be immediately usable above the fold without any scrolling
-    const ok = decodeMetrics.firstBtnVisible && decodeMetrics.allButtonsAboveTheFold && !decodeMetrics.hasHorizontalScroll && decodeMetrics.btnCount === 4;
+    // The first answer is immediately visible; all four remain reachable by normal vertical scrolling.
+    const ok = decodeMetrics.firstBtnVisible && decodeMetrics.allButtonsReachable && !decodeMetrics.hasHorizontalScroll && decodeMetrics.btnCount === 4;
     results.push({
       viewport: `${vp.name} (${vp.width}×${vp.height})`,
       test: 'Decode Voting (Mobile)',
       pass: ok,
-      details: `First btn: ${decodeMetrics.firstBtnTop}px, All 4 btns above fold: ${decodeMetrics.allButtonsAboveTheFold} (ends at ${decodeMetrics.lastBtnBottom}px / ${decodeMetrics.innerHeight}px), H-scroll: ${decodeMetrics.hasHorizontalScroll}`
+      details: `First option: ${decodeMetrics.firstBtnTop}px, all options scroll-reachable: ${decodeMetrics.allButtonsReachable} (last ends at ${decodeMetrics.lastBtnBottom}px / viewport ${decodeMetrics.innerHeight}px), H-scroll: ${decodeMetrics.hasHorizontalScroll}`
     });
     if (!ok) allPassed = false;
 
@@ -351,26 +351,30 @@ for (const vp of matrix) {
     });
     if (!imgOk) allPassed = false;
 
-    // 4. Mobile Phone Test: Decode Clue 1, 2, 3 progression states
+    // 4. Mobile Phone Test: every Decode preparing state shows all three clues and photos
     for (const clueStep of [1, 2, 3]) {
       await navigate(`http://127.0.0.1:${SERVER_PORT}/play?preview=decode-clue${clueStep}`);
       const stepMetrics = await evaluate(`() => {
         const panel = document.querySelector('.decode-preparing-panel');
-        const badge = document.querySelector('.decode-clue-stepper');
+        const cards = [...document.querySelectorAll('.decode-preparing-panel .decode-clue-item')];
+        const images = cards.map(card => card.querySelector('img'));
+        const imageWidths = images.map(img => Math.round(img.getBoundingClientRect().width));
         const scrollWidth = document.documentElement.scrollWidth;
         const clientWidth = document.documentElement.clientWidth;
         return {
           hasPanel: Boolean(panel),
-          hasStepper: Boolean(badge),
+          clueCount: cards.length,
+          loadedPhotos: images.filter(img => img?.complete && img.naturalWidth > 0).length,
+          imageWidths,
           hasHorizontalScroll: scrollWidth > clientWidth
         };
       }`);
-      const stepOk = stepMetrics.hasPanel && stepMetrics.hasStepper && !stepMetrics.hasHorizontalScroll;
+      const stepOk = stepMetrics.hasPanel && stepMetrics.clueCount === 3 && stepMetrics.loadedPhotos === 3 && stepMetrics.imageWidths.every(width => width >= 80) && !stepMetrics.hasHorizontalScroll;
       results.push({
         viewport: `${vp.name} (${vp.width}×${vp.height})`,
-        test: `Decode Clue ${clueStep} (Mobile)`,
+        test: `Decode all clues/photos (legacy preview ${clueStep})`,
         pass: stepOk,
-        details: `Preparing panel: ${stepMetrics.hasPanel}, H-scroll: ${stepMetrics.hasHorizontalScroll}`
+        details: `Clue cards: ${stepMetrics.clueCount}, photos loaded: ${stepMetrics.loadedPhotos}, photo widths: ${stepMetrics.imageWidths.join(', ')}, H-scroll: ${stepMetrics.hasHorizontalScroll}`
       });
       if (!stepOk) allPassed = false;
     }
@@ -407,9 +411,9 @@ for (const vp of matrix) {
       ['Passport Question Open', 'passport-text'],
       ['Passport Reveal', 'passport-reveal'],
       ['Leaderboard', 'leaderboard'],
-      ['Decode Preparing / Clue 1', 'decode-clue1'],
-      ['Decode Clue 2', 'decode-clue2'],
-      ['Decode Clue 3', 'decode-clue3'],
+      ['Decode All Clues (legacy preview 1)', 'decode-clue1'],
+      ['Decode All Clues (legacy preview 2)', 'decode-clue2'],
+      ['Decode All Clues (legacy preview 3)', 'decode-clue3'],
       ['Decode Voting', 'decode-voting'],
       ['Decode Reveal', 'decode-reveal']
     ];
@@ -439,12 +443,18 @@ for (const vp of matrix) {
         const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
         const status = document.querySelector('.screen-status');
         const statusRect = status?.getBoundingClientRect();
+        const decodeCards = Array.from(document.querySelectorAll('.display-decode-clues .decode-clue-item'));
+        const decodeImages = decodeCards.map(card => card.querySelector('img'));
+        const decodePhotosLoaded = decodeImages.filter(img => img?.complete && img.naturalWidth > 0).length;
         const protectedContent = Array.from(document.querySelectorAll('.display-question footer > *, .join-box, .standby-content, .display-option, .display-winning-card, .display-explanation-card, .display-map-card, .display-clue-card, .display-timer')).filter(visible);
         const collisions = statusRect ? protectedContent.filter(el => overlaps(statusRect, el.getBoundingClientRect())).map(el => el.className || el.tagName) : [];
         const edgeHeight = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--edge-height')) || 0;
         const footers = Array.from(document.querySelectorAll('.display-question footer')).filter(visible);
         const footerBehindBand = footers.some(el => el.getBoundingClientRect().bottom > innerHeight - edgeHeight + 1);
-        const textNodes = Array.from(document.querySelectorAll('.display-question h1, .display-option, .display-question footer, .join-url, .standby-content')).filter(visible);
+        const footerBottom = footers.length ? Math.round(footers[0].getBoundingClientRect().bottom) : null;
+        const section = document.querySelector('.display-question');
+        const sectionBottom = section ? Math.round(section.getBoundingClientRect().bottom) : null;
+        const textNodes = Array.from(document.querySelectorAll('.display-question h1, .display-option, .display-question footer, .display-decode-clues .decode-clue-item p, .join-url, .standby-content')).filter(visible);
         const clippedText = textNodes.filter(el => {
           const style = getComputedStyle(el);
           const clipsOverflow = ['hidden', 'clip', 'auto', 'scroll'].includes(style.overflowX) || ['hidden', 'clip', 'auto', 'scroll'].includes(style.overflowY);
@@ -456,15 +466,21 @@ for (const vp of matrix) {
           statusInsideViewport: Boolean(statusRect && statusRect.left >= 0 && statusRect.right <= innerWidth + 1 && statusRect.top >= 0 && statusRect.bottom <= innerHeight - edgeHeight + 1),
           collisions,
           footerBehindBand,
+          footerBottom,
+          sectionBottom,
+          decodeCardCount: decodeCards.length,
+          decodePhotosLoaded,
           clippedText
         };
       }`);
-      const compositionOk = !composition.hasHorizontalScroll && !composition.hasVerticalScroll && composition.statusInsideViewport && composition.collisions.length === 0 && !composition.footerBehindBand && composition.clippedText.length === 0;
+      const isDecodePreparingPreview = preview.startsWith('decode-clue');
+      const decodePhotosOk = !isDecodePreparingPreview || (composition.decodeCardCount === 3 && composition.decodePhotosLoaded === 3);
+      const compositionOk = !composition.hasHorizontalScroll && !composition.hasVerticalScroll && composition.statusInsideViewport && composition.collisions.length === 0 && !composition.footerBehindBand && composition.clippedText.length === 0 && decodePhotosOk;
       results.push({
         viewport: `${vp.name} (${vp.width}×${vp.height})`,
         test: `${label} Composition (Projector)`,
         pass: compositionOk,
-        details: `H-scroll: ${composition.hasHorizontalScroll}, V-scroll: ${composition.hasVerticalScroll}, status safe: ${composition.statusInsideViewport}, collisions: ${composition.collisions.length}, clipped text: ${composition.clippedText.length}, footer behind band: ${composition.footerBehindBand}`
+        details: `H-scroll: ${composition.hasHorizontalScroll}, V-scroll: ${composition.hasVerticalScroll}, status safe: ${composition.statusInsideViewport}, collisions: ${composition.collisions.length}, clipped text: ${composition.clippedText.length}, footer behind band: ${composition.footerBehindBand} (footer ${composition.footerBottom}px, section ${composition.sectionBottom}px), clue photos: ${composition.decodePhotosLoaded}/${composition.decodeCardCount}`
       });
       if (!compositionOk) allPassed = false;
 

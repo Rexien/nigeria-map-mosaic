@@ -4,6 +4,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { sanitizePublicQuestion, createStateEnvelope } from '../lib/state-envelope.mjs';
+import { optimizedDecodeAsset } from '../lib/question-media.mjs';
 import { generateSnapshots } from '../lib/snapshot-scoring.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -34,6 +35,10 @@ test('decode rounds bank has 6 vetted candidate rounds with 3 clues and 4 balanc
       const filePath = join(root, media.src.slice(1));
       const s = await stat(filePath);
       assert.ok(s.size > 20000, `Media ${media.src} must be valid downloaded asset (> 20KB)`);
+      const optimizedPath = filePath.replace(/\.jpe?g$/i, '.webp');
+      const optimized = await stat(optimizedPath);
+      assert.ok(optimized.size < s.size, `Optimized Decode media ${optimizedPath} must be smaller than its JPEG`);
+      assert.equal(optimizedDecodeAsset(media.src, 'decode'), media.src.replace(/\.jpe?g$/i, '.webp'));
       assert.ok(media.alt && media.alt.length > 10, `Media ${media.src} must have descriptive alt text`);
       // Ensure alt text does not give away the state name before reveal!
       assert.ok(
@@ -47,6 +52,23 @@ test('decode rounds bank has 6 vetted candidate rounds with 3 clues and 4 balanc
   for (let idx = 0; idx < 4; idx++) {
     assert.ok(optionCounts[idx] >= 1, `Option ${String.fromCharCode(65 + idx)} must be represented as correct option`);
   }
+});
+
+test('Decode preparation publishes all three safe clues and compressed photos without answer choices', () => {
+  const question = {
+    id: 'decode-ready', activity: 'decode', title: 'Decode the State',
+    question: 'Which Nigerian state do these clues describe?',
+    options: ['Ogun', 'Kano', 'Niger', 'Anambra'], correctOption: 0,
+    clues: ['Clue one is ready.', 'Clue two is ready.', 'Clue three is ready.'],
+    clueMedia: [1, 2, 3].map(i => ({ src: `/assets/decode/0${i}.jpg`, alt: `Photo ${i}` }))
+  };
+  const ready = createStateEnvelope({ state: 'preparing', activity: 'decode', sessionId: 'decode-session', version: 1 }, question);
+  assert.equal(ready.question.cluesSoFar.length, 3);
+  assert.deepEqual(ready.question.clueMediaSoFar.map(item => item.src), [
+    '/assets/decode/01.webp', '/assets/decode/02.webp', '/assets/decode/03.webp'
+  ]);
+  assert.deepEqual(ready.question.options, []);
+  assert.equal(ready.question.correctOption, undefined);
 });
 
 test('nigeria states map paths dataset covers 36 states and FCT without labeling FCT as a state', async () => {

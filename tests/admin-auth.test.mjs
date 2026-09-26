@@ -574,27 +574,18 @@ test('clean event cycle: Welcome -> Passport -> open -> reveal -> Top 10 -> next
       assert.equal(state.activity, 'decode');
       assert.equal(state.state, 'lobby');
 
-      // 8. Select Decode Question (preparing at Clue 1)
+      // 8. Select Decode Question (all clues are shown together during preparation)
       await action({ kind: 'select_question', questionId: 'q-d1' });
       state = await getState();
       assert.equal(state.state, 'preparing');
       assert.equal(state.activity, 'decode');
-      assert.equal(state.currentClue, 1);
-      assert.match(state.question.clue, /Home of Peace and Tourism/);
-
-      // 9. Advance Clue 1 -> Clue 2
-      await action({ kind: 'next_clue' });
-      state = await getState();
-      assert.equal(state.currentClue, 2);
-      assert.match(state.question.clue, /Shere Hills/);
-
-      // 10. Advance Clue 2 -> Clue 3
-      await action({ kind: 'next_clue' });
-      state = await getState();
       assert.equal(state.currentClue, 3);
-      assert.match(state.question.clue, /Capital is Jos/);
+      assert.equal(state.question.cluesSoFar.length, 3);
+      assert.match(state.question.cluesSoFar[0], /Home of Peace and Tourism/);
+      assert.match(state.question.cluesSoFar[1], /Shere Hills/);
+      assert.match(state.question.cluesSoFar[2], /Capital is Jos/);
 
-      // 11. Open voting (30s)
+      // 9. Open voting (30s)
       await action({ kind: 'open_question', questionId: 'q-d1' });
       assert.deepEqual(decodeOpenTimeline, ['decode-data-ready', 'response-counter-ready', 'open-session']);
       assert.ok(Date.parse(openSessionPatch.opened_at) >= decodeReadFinishedAt,

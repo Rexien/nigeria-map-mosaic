@@ -12,6 +12,9 @@ import { BatchFlusher } from './lib/batch-flusher.mjs';
 
 const PORT = Number(process.env.GATEWAY_PORT || process.env.PORT || 4180);
 const ADMIN_SECRET = process.env.GATEWAY_ADMIN_SECRET || (process.env.NODE_ENV==='production'?'':'dev-gateway-secret');
+// Authority finalization includes a gateway drain with its own 12-second timeout,
+// plus state reads and reveal broadcast. Do not retry a still-running callback.
+const DEADLINE_CALLBACK_TIMEOUT_MS = 25000;
 
 let cachedEnvelope = createStateEnvelope({
   eventId: 'niac-2026',
@@ -116,7 +119,7 @@ export async function notifyAuthorityDeadline(envelope,options={}){
       questionId:envelope.question.id,
       version:Number(envelope.version)
     }),
-    signal:AbortSignal.timeout(Number(options.timeoutMs||5000))
+    signal:AbortSignal.timeout(Number(options.timeoutMs??DEADLINE_CALLBACK_TIMEOUT_MS))
   });
   let body={};
   try{body=await response.json()}catch{}

@@ -17,7 +17,7 @@
     const isDecodePrep=s.activity==='decode'&&s.state==='preparing'&&Boolean(s.question);
     const visible=s.question&&(['open','locked','revealed','leaderboard'].includes(s.state)||isDecodePrep);
     if(!visible){card.classList.add('hidden');return}
-    const isOpen=s.state==='open';card.classList.remove('hidden');badge.classList.toggle('is-live',isOpen||isDecodePrep);badgeText.textContent=isOpen?'Live now':isDecodePrep?`Clue ${s.question.clueNumber||1}`:'On the main screen';activity.textContent=s.question.title||(s.activity==='decode'?'Decode the State':'Naija Passport Challenge');question.textContent=s.question.clue||s.question.question;status.textContent=isOpen?'Question is live — open it to see when answers begin.':isDecodePrep?`Clue ${s.question.clueNumber||1} of 3 is on the main screen. Voting opens after Clue 3.`:s.state==='locked'?'Answers are closed. You can still view the question.':s.state==='revealed'?'The answer has been revealed on the main screen.':'The leaderboard is on the main screen.';link.href='/play';link.textContent=isOpen?'View question':isDecodePrep?'View clues':'View question'
+    const isOpen=s.state==='open';card.classList.remove('hidden');badge.classList.toggle('is-live',isOpen||isDecodePrep);badgeText.textContent=isOpen?'Live now':isDecodePrep?'All 3 clues':'On the main screen';activity.textContent=s.question.title||(s.activity==='decode'?'Decode the State':'Naija Passport Challenge');question.textContent=s.question.question||s.question.clue;status.textContent=isOpen?'Question is live — open it to see when answers begin.':isDecodePrep?'All three clues are ready on the main screen. Voting opens when the host is ready.':s.state==='locked'?'Answers are closed. The result is being revealed.':s.state==='revealed'?'The answer has been revealed on the main screen.':'The leaderboard is on the main screen.';link.href='/play';link.textContent=isOpen?'View question':isDecodePrep?'View clues':'View question'
   }
   function applyState(data){
     if(!data)return;
@@ -27,6 +27,10 @@
     renderPlay(data);
     if(data.state==='leaderboard')renderLeaderboard(data.question?.activity||'passport');
     else renderDisplay(data);
+    if(document.body.dataset.page==='display'&&data.activity==='decode'&&data.question?.clueMedia?.length){
+      const media=data.question.clueMedia.slice(Number(data.currentClue||1));
+      for(const item of media){if(!item?.src)continue;const image=new Image();image.decoding='async';image.fetchPriority='low';image.src=item.src;}
+    }
   }
   async function loadParticipantLive(){if(window.NIACTransport&&window.NIACTransport.getStatus()==='live')return;try{renderParticipantLive(await api().request('/state'))}catch{const card=$('#participant-live-card');if(card)card.classList.add('hidden')}}
   function initActivities(){if(!guard())return;$('#participant-name').textContent=api().getProfile()?.alias||'Guest';if(window.NIACTransport){window.NIACTransport.onState(renderParticipantLive);window.NIACTransport.init()}loadParticipantLive();setInterval(loadParticipantLive,2500)}
@@ -68,10 +72,10 @@
 
     // Decode states
     const decodeClues=['Famous for its sacred indigo-patterned tie-dye textile tradition, perfected over generations by women artisans using cassava resist paste and earthenware dye vats.','Celebrates the flamboyant annual Ojude Oba equestrian carnival on the third day of Eid-el-Kabir, where aristocratic horse-riding families parade in lavish velvet regalia before the Awujale.','Its capital Abeokuta is crowned by a legendary sacred granite fortress where Egba refugees found sanctuary in the 1830s.'];
-    const decodeMedia=[{src:'/assets/decode/01.jpg',alt:'Artisan displaying indigo resist dyed fabric'},{src:'/assets/decode/02.jpg',alt:'Riders on decorated horses parading'},{src:'/assets/decode/03.jpg',alt:'Massive natural granite outcrop and historic shrine'}];
+    const decodeMedia=[{src:'/assets/decode/01.webp',alt:'Artisan displaying indigo resist dyed fabric'},{src:'/assets/decode/02.webp',alt:'Riders on decorated horses parading'},{src:'/assets/decode/03.webp',alt:'Massive natural granite outcrop and historic shrine'}];
     const buildDecodeQ=(clueNum, isOpen, isRev)=>{
       return {
-        id:'decode-preview',activity:'decode',title:'Decode the State',category:'South West',question:'Which Nigerian state do these clues describe?',options:isOpen||isRev?['Ogun','Kano','Niger','Anambra']:[],correctOption:isRev?0:undefined,explanation:isRev?'Olumo Rock, Adire textile heritage, and Ojude Oba festival are iconic to Ogun State.':undefined,durationSeconds:30,clueNumber:clueNum,clue:decodeClues[clueNum-1],cluesSoFar:decodeClues.slice(0,clueNum),clueMediaSoFar:decodeMedia.slice(0,clueNum),highlightState:isRev?'Ogun':null
+        id:'decode-preview',activity:'decode',title:'Decode the State',category:'South West',question:'Which Nigerian state do these clues describe?',options:isOpen||isRev?['Ogun','Kano','Niger','Anambra']:[],correctOption:isRev?0:undefined,explanation:isRev?'Olumo Rock, Adire textile heritage, and Ojude Oba festival are iconic to Ogun State.':undefined,durationSeconds:30,clueNumber:3,clue:decodeClues[2],cluesSoFar:decodeClues,clueMediaSoFar:decodeMedia,highlightState:isRev?'Ogun':null
       };
     };
 
@@ -103,9 +107,13 @@
     if(!m||!m.src)return '';
     const fallback='Image unavailable. Use the question/clue to continue.';
     return `<div class="display-media-wrap">
-      <img src="${escape(m.src)}" alt="${escape(m.alt||'')}" class="display-photo" decoding="async" onerror="this.closest('.display-media-wrap, .reveal-photo-column').classList.add('media-failed')">
+      <img src="${escape(m.src)}" alt="${escape(m.alt||'')}" class="display-photo" loading="eager" fetchpriority="high" decoding="async" onerror="this.closest('.display-media-wrap, .reveal-photo-column').classList.add('media-failed')">
       <div class="display-media-fallback"><p>${fallback}</p></div>
     </div>`;
+  }
+  function decodeClueCardsHTML(q, className='decode-clues-list'){
+    const clues=q.cluesSoFar|| (q.clue?[q.clue]:[]),media=q.clueMediaSoFar||[];
+    return `<div class="${className}">${clues.map((clue,i)=>{const item=media[i];return `<article class="decode-clue-item"><div class="decode-clue-image">${item?.src?`<img src="${escape(item.src)}" alt="${escape(item.alt||'') }" loading="eager" fetchpriority="high" decoding="async">`:''}</div><p><strong>Clue ${i+1}</strong>${escape(clue)}</p></article>`}).join('')}</div>`;
   }
   function renderPlay(s){
     const root=$('#play-root');if(!root)return;
@@ -155,7 +163,7 @@
     lastDeadline = s.deadlineAt;
 
     if(isDecodePrep){
-      root.innerHTML=`<div class="panel play-panel decode-preparing-panel"><div class="question-meta"><span>Decode the State · Clue ${clueNum} of 3</span>${isSpectator?'<span class="spectator-badge">Spectator view</span>':''}</div><h1>${escape(q.clue||q.question)}</h1><div class="decode-clue-stepper" aria-label="Clue progression" style="display:flex;gap:8px;margin:12px 0 16px"><span class="badge ${clueNum>=1?'is-live':''}" style="padding:4px 10px;border-radius:6px;border:1px solid #d4af37;background:${clueNum===1?'#d4af37':'rgba(212,175,55,0.2)'};color:${clueNum===1?'#0c1a12':'#f3e5ab'};font-weight:700">Clue 1${clueNum===1?' (Showing)':''}</span><span class="badge ${clueNum>=2?'is-live':''}" style="padding:4px 10px;border-radius:6px;border:1px solid #d4af37;background:${clueNum===2?'#d4af37':'rgba(212,175,55,0.2)'};color:${clueNum===2?'#0c1a12':'#f3e5ab'};font-weight:700">Clue 2${clueNum===2?' (Showing)':''}</span><span class="badge ${clueNum>=3?'is-live':''}" style="padding:4px 10px;border-radius:6px;border:1px solid #d4af37;background:${clueNum===3?'#d4af37':'rgba(212,175,55,0.2)'};color:${clueNum===3?'#0c1a12':'#f3e5ab'};font-weight:700">Clue 3${clueNum===3?' (Showing)':''}</span></div>${playMediaHTML(q,false)}<div class="notice decode-notice" role="status"><strong>Watch the main screen!</strong><span>Clue ${clueNum} of 3 is on the main screen. The state choices and interactive map will open for voting after Clue 3.</span></div><p id="personal-live-score" class="muted"></p></div>`;
+      root.innerHTML=`<div class="panel play-panel decode-preparing-panel is-decode-play"><div class="question-meta"><span>Decode the State · All 3 clues</span>${isSpectator?'<span class="spectator-badge">Spectator view</span>':''}</div><h1>${escape(q.question)}</h1>${decodeClueCardsHTML(q)}<div class="notice decode-notice" role="status"><strong>Get ready</strong><span>All three clues are ready. Map and answer choices open when the host starts voting.</span></div><p id="personal-live-score" class="muted"></p></div>`;
       updateLiveScore('decode');
       return;
     }
@@ -166,17 +174,11 @@
     const resultCopy=isCorrect?`You chose ${correct}.`:answered?`You chose ${picked}. The correct answer is ${correct}.`:`The correct answer is ${correct}.`;
 
     // Mobile Decode: Compact clue tabs so answer options A-D are immediately visible above the fold
-    const activeClueIdx = Math.max(0, (q.cluesSoFar?.length || 1) - 1);
-    const decodeCluesHTML = isDecode && q.cluesSoFar && q.cluesSoFar.length > 0 ? `
-      <div class="decode-voting-clues" role="region" aria-label="Clues so far">
-        <div class="decode-clue-tabs">
-          ${q.cluesSoFar.map((c, i) => `<button type="button" class="clue-tab ${i===activeClueIdx?'is-active':''}" data-clue-idx="${i}">Clue ${i+1}${i===activeClueIdx?' (Latest)':''}</button>`).join('')}
-        </div>
-        <div class="decode-active-clue-preview" id="decode-active-clue-text">${escape(q.cluesSoFar[activeClueIdx])}</div>
-      </div>` : playMediaHTML(q, revealed);
+    const decodeCluesHTML = isDecode && q.cluesSoFar?.length ? decodeClueCardsHTML(q, 'decode-clues-list decode-clues-phone') : playMediaHTML(q, revealed);
 
     const questionNumberLabel = isDecode ? 'Mystery State' : (q.order ? `Question ${q.order}` : 'Trivia');
-    const timerHTML = !isSpectator && s.state === 'open' ? `<strong class="timer" id="timer" aria-label="${startsIn(s)?'Seconds until answers open':'Seconds remaining'}">${startsIn(s)||remaining(s)}</strong>` : '';
+    const timerHTML = !isSpectator && s.state === 'open' ? `<strong class="timer ${startsIn(s)>0?'is-preparing':''}" id="timer" aria-label="${startsIn(s)?'Answers opening soon':'Seconds remaining'}">${startsIn(s)>0?'READY':remaining(s)}</strong>` : '';
+    const prepOverlay = startsIn(s)>0 ? `<div class="answer-prep-overlay" id="answer-prep-overlay" role="status" aria-live="polite"><span>Get ready</span><strong>Answers open in <b id="answer-prep-count">${startsIn(s)}</b></strong></div>` : '';
 
     root.innerHTML=`<div class="panel play-panel ${isDecode?'is-decode-play':''}">
       <div class="question-meta">
@@ -185,6 +187,7 @@
         ${timerHTML}
       </div>
       <h1>${escape(isDecode?'Which Nigerian state do these clues describe?':(q.clue||q.question))}</h1>
+      ${prepOverlay}
       ${revealed?`<div class="notice result-notice ${isCorrect?'result-correct':'result-wrong'}" role="status"><strong>${resultTitle}</strong><span>${resultCopy}</span><small>${escape(q.explanation||'')}</small></div>`:''}
       ${decodeCluesHTML}
       <div class="answers">
@@ -199,20 +202,6 @@
       <p id="answer-message" class="muted" aria-live="polite">${prior?.confirmed?(prior?.spectator||isSpectator?'Answer recorded · Spectator mode':'Answer received — locked in.'):prior&&s.state==='open'?'Connection interrupted — keeping your answer and retrying.':s.state==='open'?(startsIn(s)>0?`Answers open in ${startsIn(s)} seconds — get ready.`:isSpectator?'Choose one answer for interactive practice (Spectator mode).':'Select your answer above. Once received, it cannot be changed.'):'Answers are closed.'}</p>
       <p id="personal-live-score" class="muted"></p>
     </div>`;
-
-    if(isDecode && q.cluesSoFar){
-      $$('.clue-tab', root).forEach(tab => {
-        tab.addEventListener('click', e => {
-          e.preventDefault();
-          const idx = Number(tab.dataset.clueIdx);
-          $$('.clue-tab', root).forEach(t => t.classList.toggle('is-active', t === tab));
-          const previewEl = $('#decode-active-clue-text', root);
-          if (previewEl && q.cluesSoFar[idx]) {
-            previewEl.textContent = q.cluesSoFar[idx];
-          }
-        });
-      });
-    }
 
     if(isDecode && window.NigeriaStatesMap){
       const mapWrap=$('#play-map-container',root);
@@ -249,7 +238,8 @@
       }
       lastScoreFetchKey = scoreKey;
       if(el){
-        if(el.parentElement?.querySelector('.notice'))el.parentElement.querySelector('h1')?.after(el);
+      const result=el.parentElement?.querySelector('.result-notice');
+      if(result)result.after(el);
         const total = Number(d.scores?.total ?? ((d.scores?.combined || 0) + (d.scores?.decode || 0)));
         if(d.isSpectator){
           el.textContent='Spectator mode · Interactive practice only';
@@ -283,7 +273,13 @@
         el.setAttribute('aria-label',starting?'Seconds until answers open':'Seconds remaining');
       }
       const displayState=$('.display-state');
-      if(displayState&&s.state==='open'&&displayState.lastChild)displayState.lastChild.textContent=starting?'Get ready · answers opening soon':'Answers open';
+      if(displayState&&displayState.lastChild){
+        displayState.lastChild.textContent=s.state==='locked'?'Answers closed · revealing answer…':s.state==='open'&&left===0?'Answers closed · revealing answer…':starting?'Get ready · opening soon':'Answers open';
+      }
+      const prepOverlay=$('#answer-prep-overlay');
+      if(prepOverlay){prepOverlay.hidden=!starting;const count=$('#answer-prep-count');if(count)count.textContent=openingIn;}
+      const displayPrep=$('#display-prep-overlay');
+      if(displayPrep){displayPrep.hidden=!starting;const count=$('#display-prep-count');if(count)count.textContent=openingIn;}
       if(s.state==='open'&&wasStarting!==starting){
         const prior=JSON.parse(localStorage.getItem(`niac-answer-${s.question.id}`)||'null');
         $$('.answer').forEach(b=>b.disabled=starting||left===0||Boolean(prior));
@@ -304,9 +300,11 @@
       wasStarting=starting;
       if(left===0&&s.state==='open'){
         $$('.answer').forEach(b=>b.disabled=true);
+        if(el){el.textContent='…';el.setAttribute('aria-label','Answers closed; reveal in progress');el.classList.add('is-reveal-pending');}
         const note=$('#answer-message');
-        if(note&&!localStorage.getItem(`niac-answer-${s.question.id}`))message(note,'Time is up — waiting for the answer reveal.');
+        if(note&&!localStorage.getItem(`niac-answer-${s.question.id}`))message(note,'Answers closed · revealing the answer…');
       }
+      if(el&&s.state==='locked'){el.textContent='…';el.setAttribute('aria-label','Answers closed; reveal in progress');el.classList.add('is-reveal-pending');}
     };
     tick();
     clockTimer=setInterval(tick,250);
@@ -406,16 +404,16 @@
       root.innerHTML=`<section class="display-standby"><div class="standby-content"><p class="welcome-kicker">Shell Companies in Nigeria</p><h1>${name}</h1><p>Next question coming up</p></div></section>`;
       return;
     }
-    const q=s.question,reveal=['revealed','leaderboard'].includes(s.state),stateLabel=s.state==='open'?'Answers open':s.state==='locked'?'Answers closed':isDecodePrep?`Clue ${q.clueNumber||1} showing`:'Answer revealed';
+    const q=s.question,reveal=['revealed','leaderboard'].includes(s.state),stateLabel=s.state==='open'?'Answers open':s.state==='locked'?'Answers closed · revealing answer…':isDecodePrep?'All three clues on screen':'Answer revealed';
+    const prepHTML=startsIn(s)>0?`<div class="display-prep-overlay" id="display-prep-overlay" role="status" aria-live="polite"><strong>Get ready</strong><span>Answers open in <b id="display-prep-count">${startsIn(s)}</b></span></div>`:'';
 
     if(isDecodePrep){
-      const clueNum=q.clueNumber||1;const mediaHTML=displayMediaHTML(q,false);
-      root.innerHTML=`<section class="display-question is-decode-preparing is-live-question ${mediaHTML?'has-media':''}"><header><div class="display-brand"><span class="display-brand-mark">NG</span><span>Decode the State</span></div><strong class="display-category">Clue ${clueNum} of 3</strong></header><h1>${escape(q.clue||q.question)}</h1>${mediaHTML}<div class="display-clue-stepper" aria-label="Clue progress" style="display:flex;justify-content:center;gap:16px;margin:16px 0"><span class="step" style="padding:6px 14px;border-radius:20px;font-weight:700;background:${clueNum===1?'var(--gold,#d4af37)':'rgba(0,0,0,0.3)'};color:${clueNum===1?'#0c1a12':'#fff'}">Clue 1</span><span class="step" style="padding:6px 14px;border-radius:20px;font-weight:700;background:${clueNum===2?'var(--gold,#d4af37)':'rgba(0,0,0,0.3)'};color:${clueNum===2?'#0c1a12':'#fff'}">Clue 2</span><span class="step" style="padding:6px 14px;border-radius:20px;font-weight:700;background:${clueNum===3?'var(--gold,#d4af37)':'rgba(0,0,0,0.3)'};color:${clueNum===3?'#0c1a12':'#fff'}">Clue 3</span></div><footer><span class="display-state"><i class="display-state-dot"></i>Clue ${clueNum} showing · Voting opens after Clue 3</span><span>Decode the State · 1,000 pts</span></footer></section>`;
+      root.innerHTML=`<section class="display-question is-decode-preparing"><header><div class="display-brand"><span class="display-brand-mark">NG</span><span>Decode the State</span></div><strong class="display-category">All 3 clues</strong></header><h1>${escape(q.question)}</h1>${decodeClueCardsHTML(q,'decode-clues-list display-decode-clues')}<footer><span class="display-state"><i class="display-state-dot"></i>All three clues are on screen · Voting opens on the MC’s cue</span><span>Decode the State</span></footer></section>`;
       return;
     }
 
     if(q.activity==='decode'){
-      root.innerHTML=`<section class="display-question is-decode ${reveal?'is-revealed':'is-live-question'}"><header><div class="display-brand"><span class="display-brand-mark">NG</span><span>Decode the State</span></div><strong class="display-category">${reveal?'Mystery State Revealed':'Which State Is It?'}</strong></header><h1>${reveal?`Mystery State: ${escape(q.options[q.correctOption])} State`:'Identify the Nigerian State from the clues'}</h1><div class="display-timer" id="timer" aria-label="Seconds remaining">${remaining(s)}</div><div class="display-map-card" id="display-map-container"></div><div class="display-clues-strip">${(q.cluesSoFar||[q.clue]).map((c,i)=>{const m=(q.clueMediaSoFar||[])[i]||(i===(q.clueNumber-1)?q.media:null);return `<div class="display-clue-card"><div class="display-clue-img-wrap">${m?.src?`<img src="${escape(m.src)}" alt="${escape(m.alt||'')}" class="display-clue-img">`:''}</div><div class="display-clue-text" style="padding:6px 10px;font-size:0.85rem;line-height:1.3"><strong>Clue ${i+1}:</strong> ${escape(c)}</div></div>`}).join('')}</div><div class="display-options">${q.options.map((o,i)=>`<div class="display-option ${reveal&&q.correctOption===i?'correct':''}"><span class="display-option-letter">${String.fromCharCode(65+i)}</span><span>${escape(o)} State</span>${reveal&&q.correctOption===i?'<span class="display-check">✓</span>':''}</div>`).join('')}</div>${reveal?`<aside><strong>Why:</strong> ${escape(q.explanation||'')}${q.highlightState?` · Highlight: ${escape(q.highlightState)} State`:''}</aside>`:''}<footer><span class="display-state"><i class="display-state-dot"></i>${stateLabel}</span><span>Decode the State · 1,000 pts</span></footer></section>`;
+      root.innerHTML=`<section class="display-question is-decode ${reveal?'is-revealed':'is-live-question'}"><header><div class="display-brand"><span class="display-brand-mark">NG</span><span>Decode the State</span></div><strong class="display-category">${reveal?'Mystery State Revealed':'Which State Is It?'}</strong></header><h1>${reveal?`Mystery State: ${escape(q.options[q.correctOption])} State`:'Identify the Nigerian State from the clues'}</h1><div class="display-timer ${s.state==='locked'?'is-reveal-pending':''}" id="timer" aria-label="${s.state==='locked'?'Answers closed; reveal in progress':startsIn(s)?'Answers opening soon':'Seconds remaining'}">${s.state==='locked'?'…':startsIn(s)?'READY':remaining(s)}</div>${prepHTML}<div class="display-map-card" id="display-map-container"></div><div class="display-clues-strip">${(q.cluesSoFar||[q.clue]).map((c,i)=>{const m=(q.clueMediaSoFar||[])[i]||(i===(q.clueNumber-1)?q.media:null);return `<div class="display-clue-card"><div class="display-clue-img-wrap">${m?.src?`<img src="${escape(m.src)}" alt="${escape(m.alt||'')}" class="display-clue-img" loading="eager" fetchpriority="high" decoding="async">`:''}</div><div class="display-clue-text" style="padding:6px 10px;font-size:0.85rem;line-height:1.3"><strong>Clue ${i+1}:</strong> ${escape(c)}</div></div>`}).join('')}</div><div class="display-options">${q.options.map((o,i)=>`<div class="display-option ${reveal&&q.correctOption===i?'correct':''}"><span class="display-option-letter">${String.fromCharCode(65+i)}</span><span>${escape(o)} State</span>${reveal&&q.correctOption===i?'<span class="display-check">✓</span>':''}</div>`).join('')}</div>${reveal?`<aside><strong>Why:</strong> ${escape(q.explanation||'')}${q.highlightState?` · Highlight: ${escape(q.highlightState)} State`:''}</aside>`:''}<footer><span class="display-state"><i class="display-state-dot"></i>${stateLabel}</span><span>Decode the State · 1,000 pts</span></footer></section>`;
       if(window.NigeriaStatesMap){
         const mapContainer=$('#display-map-container',root);
         if(mapContainer){
@@ -472,7 +470,7 @@
       </section>`;
     } else {
       // Normal Voting Screen: Question + Timer + Media + Options
-      root.innerHTML=`<section class="display-question is-live-question ${mediaHTML?'has-media':''}"><header><div class="display-brand"><span class="display-brand-mark">NG</span><span>${escape(q.title||'Naija Passport Challenge')}</span></div><strong class="display-category">${escape(q.category)}</strong></header><h1>${escape(q.clue||q.question)}</h1><div class="display-timer" id="timer" aria-label="Seconds remaining">${remaining(s)}</div>${mediaHTML}<div class="display-options">${q.options.map((o,i)=>`<div class="display-option"><span class="display-option-letter">${String.fromCharCode(65+i)}</span><span>${escape(o)}</span></div>`).join('')}</div><footer><span class="display-state"><i class="display-state-dot"></i>${stateLabel}</span>${orderFooter?`<span>${orderFooter}</span>`:''}</footer></section>`;
+      root.innerHTML=`<section class="display-question is-live-question ${mediaHTML?'has-media':''}"><header><div class="display-brand"><span class="display-brand-mark">NG</span><span>${escape(q.title||'Naija Passport Challenge')}</span></div><strong class="display-category">${escape(q.category)}</strong></header><h1>${escape(q.clue||q.question)}</h1><div class="display-timer ${s.state==='locked'?'is-reveal-pending':''}" id="timer" aria-label="${s.state==='locked'?'Answers closed; reveal in progress':startsIn(s)?'Answers opening soon':'Seconds remaining'}">${s.state==='locked'?'…':startsIn(s)?'READY':remaining(s)}</div>${prepHTML}${mediaHTML}<div class="display-options">${q.options.map((o,i)=>`<div class="display-option"><span class="display-option-letter">${String.fromCharCode(65+i)}</span><span>${escape(o)}</span></div>`).join('')}</div><footer><span class="display-state"><i class="display-state-dot"></i>${stateLabel}</span>${orderFooter?`<span>${orderFooter}</span>`:''}</footer></section>`;
       startClock(s);
     }
   }

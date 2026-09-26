@@ -57,6 +57,32 @@
   }
 
   let adminStatus;
+  let adminClockOffset=0;
+  let statusRequest=null;
+  let statusRequestVersion=0;
+  function updateOperatorGuidance(){
+    if(!adminStatus)return;
+    const {session,settings,metrics}=adminStatus;
+    const state=session?.state||'lobby',activity=settings?.active_activity||'lens';
+    let instruction=guidance[state]||'Check the big screen before continuing.';
+    if(activity==='decode'&&state==='preparing'){
+      instruction='All three clues are on the screen. Open voting when the MC cues.';
+    }
+    if(state==='open'){
+      const now=Date.now()+adminClockOffset;
+      const openedAt=Date.parse(session?.opened_at||session?.openedAt||'');
+      const deadline=Date.parse(session?.deadline_at||session?.deadlineAt||'');
+      if(Number.isFinite(openedAt)&&now<openedAt){
+        instruction=`Get ready · answers open in ${Math.ceil((openedAt-now)/1000)}s.`;
+      }else if(Number.isFinite(deadline)){
+        const seconds=Math.max(0,Math.ceil((deadline-now)/1000));
+        instruction=seconds>0
+          ?`Question live · ${seconds}s remaining · ${metrics?.responseCount||0} answers received.`
+          :'Time is up · closing answers and revealing the result…';
+      }
+    }
+    $('#operator-guidance').textContent=instruction;
+  }
   function applyAdminStatus(status){
     adminStatus=status;const state=status.session?.state||'lobby',activity=status.settings?.active_activity||'lens';
     const isLobby = status.settings?.screen_mode ? status.settings.screen_mode === 'welcome' : (status.session?.state === 'lobby' && !status.session?.currentQuestionId && status.settings?.active_activity === 'lens');
@@ -86,7 +112,7 @@
         rosterText.classList.toggle('frozen', isFrozen);
       }
     }
-    let instruction=guidance[state]||'Check the big screen before continuing.';const deadline=status.session?.deadline_at||status.session?.deadlineAt;if(state==='open'&&deadline){const seconds=Math.max(0,Math.ceil((new Date(deadline).getTime()-Date.now())/1000));instruction=`Question live · ${seconds}s remaining · ${status.metrics.responseCount} answers received.`}$('#operator-guidance').textContent=instruction;$('#rehearsal-mode').checked=Boolean(status.settings?.rehearsal_mode);
+    $('#rehearsal-mode').checked=Boolean(status.settings?.rehearsal_mode);
     const activeChoice=isLobby?'lobby':activity;$$('[name="active-activity"]').forEach(input=>{input.checked=input.value===activeChoice});$('#quiz-controls').classList.toggle('hidden',isLobby||activity==='lens');
     $$('[data-state]').forEach(button=>{button.disabled=!transitions[state]?.includes(button.dataset.state)});
     const select=$('#question-select'),value=select.value,currentId=status.session?.current_question_id||status.session?.currentQuestionId;
@@ -98,16 +124,14 @@
 
     if(activity==='decode'){
       if(state==='lobby'){
-        $('#open-question').innerHTML='<span>Show Clue 1</span><small>Projector + phones</small>';
+        $('#open-question').innerHTML='<span>Prepare all clues</span><small>Projector + phones</small>';
         $('#open-question').disabled=!select.value;
         $('#next-clue').classList.add('hidden');
       }else if(state==='preparing'){
         $('#open-question').innerHTML='<span>Open voting (30s)</span><small>Show map + A–D</small>';
         $('#open-question').disabled=false;
-        $('#next-clue').classList.remove('hidden');
-        $('#next-clue').disabled=currentClue>=3;
-        $('#next-clue').textContent=currentClue>=3?'Clue 3 showing (Last clue)':`Show Clue ${currentClue+1}`;
-        instruction=`Clue ${currentClue} of 3 is on the screen. Advance to Clue ${currentClue+1} or open voting when the MC cues.`;
+        $('#next-clue').classList.add('hidden');
+        $('#next-clue').disabled=true;
       }else if(state==='open'){
         $('#open-question').innerHTML='<span>Voting open</span><small>Timer running</small>';
         $('#open-question').disabled=true;
@@ -122,15 +146,28 @@
       $('#open-question').disabled=state==='open'||state==='ended'||!select.value;
       $('#next-clue').classList.add('hidden');
     }
-    $('#operator-guidance').textContent=instruction;
+    updateOperatorGuidance();
   }
-  async function refreshStatus(){const status=await api().request('/admin/status',{admin:true});applyAdminStatus(status);return status}
+  function refreshStatus(force=false){
+    if(statusRequest&&!force)return statusRequest;
+    const version=++statusRequestVersion;
+    const request=api().request('/admin/status',{admin:true}).then(status=>{
+      if(version===statusRequestVersion){
+        const serverNow=Date.parse(status.serverNow||'');
+        if(Number.isFinite(serverNow))adminClockOffset=serverNow-Date.now();
+        applyAdminStatus(status);
+      }
+      return status;
+    }).finally(()=>{if(statusRequest===request)statusRequest=null});
+    statusRequest=request;
+    return request;
+  }
   function setActionPending(pending,button){actionPending=pending;$('#control-room')?.setAttribute('aria-busy',String(pending));$$('#quiz-controls button,#activity-options input').forEach(control=>control.disabled=pending);if(button){if(pending){button.dataset.idleLabel=button.innerHTML;button.textContent='Sending…'}else if(button.dataset.idleLabel){button.innerHTML=button.dataset.idleLabel;delete button.dataset.idleLabel}}if(!pending&&adminStatus)applyAdminStatus(adminStatus)}
-  async function perform(body,success,button){if(actionPending)return;try{setActionPending(true,button);show($('#admin-message'),'Sending to the big screen…');await api().request('/admin/action',{method:'POST',admin:true,body,timeout:10000});await refreshStatus();screenChannel?.postMessage({type:'state-changed',at:Date.now()});show($('#admin-message'),`✓ ${success}`)}catch(err){show($('#admin-message'),`${err.message} Check the “Right now” status before pressing again.`,true)}finally{setActionPending(false,button)}}
-  async function changeActivity(value){if(actionPending)return;try{setActionPending(true);$$('[name="active-activity"]').forEach(input=>{input.checked=input.value===value});show($('#screen-message'),'Changing the big screen…');if(value==='lobby'){await api().request('/admin/action',{method:'POST',admin:true,body:{kind:'show_welcome'},timeout:10000})}else{await api().request('/admin/action',{method:'POST',admin:true,body:{kind:'set_settings',activeActivity:value,rehearsalMode:$('#rehearsal-mode').checked},timeout:10000})}await refreshStatus();screenChannel?.postMessage({type:'state-changed',at:Date.now()});show($('#screen-message'),`✓ ${activityNames[value]||value} is now on the big screen.`)}catch(err){show($('#screen-message'),`${err.message} Check the big screen before pressing again.`,true);applyAdminStatus(adminStatus)}finally{setActionPending(false)}}
+  async function perform(body,success,button){if(actionPending)return;try{setActionPending(true,button);show($('#admin-message'),'Sending to the big screen…');await api().request('/admin/action',{method:'POST',admin:true,body,timeout:10000});await refreshStatus(true);screenChannel?.postMessage({type:'state-changed',at:Date.now()});show($('#admin-message'),`✓ ${success}`)}catch(err){show($('#admin-message'),`${err.message} Check the “Right now” status before pressing again.`,true)}finally{setActionPending(false,button)}}
+  async function changeActivity(value){if(actionPending)return;try{setActionPending(true);$$('[name="active-activity"]').forEach(input=>{input.checked=input.value===value});show($('#screen-message'),'Changing the big screen…');if(value==='lobby'){await api().request('/admin/action',{method:'POST',admin:true,body:{kind:'show_welcome'},timeout:10000})}else{await api().request('/admin/action',{method:'POST',admin:true,body:{kind:'set_settings',activeActivity:value,rehearsalMode:$('#rehearsal-mode').checked},timeout:10000})}await refreshStatus(true);screenChannel?.postMessage({type:'state-changed',at:Date.now()});show($('#screen-message'),`✓ ${activityNames[value]||value} is now on the big screen.`)}catch(err){show($('#screen-message'),`${err.message} Check the big screen before pressing again.`,true);applyAdminStatus(adminStatus)}finally{setActionPending(false)}}
   let lastModerationFingerprint = '';
   async function loadModeration(){const body=$('#moderation-body');if(!body)return;try{const data=await api().request('/admin/lens',{admin:true});const responses=Array.isArray(data?.responses)?data.responses:[];const fingerprint=JSON.stringify(responses.map(r=>[r.id,r.status,r.phrase]));if(fingerprint===lastModerationFingerprint)return;lastModerationFingerprint=fingerprint;body.innerHTML=responses.map(r=>{const fixBtn=`<button class="small-button" data-edit="${r.id}" data-phrase="${escape(r.phrase)}">Fix spelling</button>`;let actionHtml='';if(r.status==='pending'){actionHtml=`<button class="small-button" data-moderate="${r.id}" data-status="approved">Approve</button><button class="small-button" data-moderate="${r.id}" data-status="hidden">Hide</button>${fixBtn}`}else if(r.status==='approved'){actionHtml=`<button class="small-button" data-moderate="${r.id}" data-status="hidden">Hide</button>${fixBtn}`}else{actionHtml=`<button class="small-button" data-moderate="${r.id}" data-status="approved">Restore</button>${fixBtn}`}return `<tr><td><strong>${escape(r.phrase)}</strong></td><td>${escape(r.participants?.alias||'Legacy')}</td><td>${escape(r.status)}</td><td><div class="row-actions">${actionHtml}</div></td></tr>`}).join('')||'<tr><td colspan="4">No map responses yet.</td></tr>';$$('[data-moderate]').forEach(button=>button.onclick=async()=>{await api().request('/admin/action',{method:'POST',admin:true,body:{kind:'moderate',id:button.dataset.moderate,status:button.dataset.status}});lastModerationFingerprint='';loadModeration()});$$('[data-edit]').forEach(button=>button.onclick=async()=>{const phrase=prompt('Correct the spelling:',button.dataset.phrase);if(phrase==null)return;await api().request('/admin/action',{method:'POST',admin:true,body:{kind:'moderate',id:button.dataset.edit,status:'approved',phrase}});lastModerationFingerprint='';loadModeration()});$('#export-lens').onclick=()=>{const csv=['phrase,alias,status,created_at',...responses.map(r=>[r.phrase,r.participants?.alias||'Legacy',r.status,r.created_at].map(x=>`"${String(x).replaceAll('"','""')}"`).join(','))].join('\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`niac-lens-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(a.href)}}catch(err){show($('#admin-message'),err.message,true)}}
-  async function clearData(scope,required){const confirmText=prompt(`Type ${required} exactly to continue.`);if(confirmText!==required)return;try{const result=await api().request('/admin/action',{method:'POST',admin:true,body:{kind:'clear_data',scope,confirmText}});await refreshStatus();show($('#admin-message'),`${result.cleared} participant profiles cleared.`)}catch(err){show($('#admin-message'),err.message,true)}}
+  async function clearData(scope,required){const confirmText=prompt(`Type ${required} exactly to continue.`);if(confirmText!==required)return;try{const result=await api().request('/admin/action',{method:'POST',admin:true,body:{kind:'clear_data',scope,confirmText}});await refreshStatus(true);show($('#admin-message'),`${result.cleared} participant profiles cleared.`)}catch(err){show($('#admin-message'),err.message,true)}}
 
   async function initAdmin(){
     if(!await ensureAdmin()){
@@ -152,14 +189,14 @@
     }
     $$('[name="active-activity"]').forEach(input=>{input.onclick=()=>{$$('[name="active-activity"]').forEach(i=>{i.checked=(i===input)});changeActivity(input.value)}});
     $('#question-select').onchange=()=>{$('#open-question').disabled=!$('#question-select').value||adminStatus?.session?.state==='open'||adminStatus?.session?.state==='ended'};
-    $('#open-question').onclick=event=>{const qSelect=$('#question-select').value;const currentId=adminStatus?.session?.current_question_id||adminStatus?.session?.currentQuestionId;const questionId=qSelect||currentId;if(!questionId)return show($('#admin-message'),'Choose a question first.',true);const act=adminStatus?.settings?.active_activity||'passport';const state=adminStatus?.session?.state||'lobby';if(act==='decode'&&state==='lobby'){perform({kind:'select_question',questionId},'Clue 1 is now showing on the big screen and phones.',event.currentTarget)}else if(act==='decode'&&state==='preparing'){perform({kind:'open_question',questionId},'Voting is now open! 30-second countdown started.',event.currentTarget)}else{perform({kind:'open_question',questionId},'Question opened on the projector and phones.',event.currentTarget)}};
+    $('#open-question').onclick=event=>{const qSelect=$('#question-select').value;const currentId=adminStatus?.session?.current_question_id||adminStatus?.session?.currentQuestionId;const questionId=qSelect||currentId;if(!questionId)return show($('#admin-message'),'Choose a question first.',true);const act=adminStatus?.settings?.active_activity||'passport';const state=adminStatus?.session?.state||'lobby';if(act==='decode'&&state==='lobby'){perform({kind:'select_question',questionId},'All three clues are on the big screen and phones.',event.currentTarget)}else if(act==='decode'&&state==='preparing'){perform({kind:'open_question',questionId},'Voting is now open! 30-second countdown started.',event.currentTarget)}else{perform({kind:'open_question',questionId},'Question opened on the projector and phones.',event.currentTarget)}};
     $$('[data-state]').forEach(button=>button.onclick=event=>perform({state:button.dataset.state},states[button.dataset.state]||'Screen updated.',event.currentTarget));
     $('#next-clue').onclick=event=>perform({kind:'next_clue'},'The next clue is now showing.',event.currentTarget);
     $('#save-settings').onclick=()=>changeActivity($('[name="active-activity"]:checked')?.value||'lens');
     $('#void-question').onclick=()=>{if(confirm('Void this question and remove its points from every score?'))perform({kind:'void_question'},'Question voided and scores corrected.')};
     $('#btn-toggle-freeze')?.addEventListener('click',event=>perform({kind:'toggle_roster_freeze'},'Roster status updated.',event.currentTarget));
     $('#clear-rehearsal').onclick=()=>clearData('rehearsal','CLEAR REHEARSAL DATA');$('#reset-production').onclick=()=>clearData('production','RESET NIAC 2026 PRODUCTION DATA');
-    await loadModeration();setInterval(()=>{refreshStatus().catch(()=>{});loadModeration().catch(()=>{})},2500);
+    await loadModeration();setInterval(updateOperatorGuidance,250);setInterval(()=>{refreshStatus().catch(()=>{});loadModeration().catch(()=>{})},2500);
   }
 
   let questions=[];
