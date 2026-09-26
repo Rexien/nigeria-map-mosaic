@@ -175,6 +175,45 @@ test('open state schedules authenticated deadline callback and retries transient
   }
 });
 
+test('a slow successful deadline callback is not retried while finalization is still running', async () => {
+  resetClients();
+  const sessionId = '99999999-9999-4999-8999-999999999999';
+  const questionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  let current = createStateEnvelope({
+    eventId: 'event-slow-deadline', sessionId, state: 'open', version: 3,
+    openedAt: new Date(Date.now() - 1000).toISOString(),
+    deadlineAt: new Date(Date.now() + 40).toISOString()
+  }, question(questionId));
+  setCachedEnvelope(createStateEnvelope({ eventId: 'event-slow-deadline', sessionId, state: 'lobby', version: 1 }));
+
+  let deadlineCalls = 0;
+  const authority = createHttpServer(async (req, res) => {
+    if (req.url === '/api/state') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify(current));
+    }
+    if (req.url === '/api/internal/deadline' && req.method === 'POST') {
+      deadlineCalls += 1;
+      if (deadlineCalls === 1) await sleep(5500); // Exceeds the former five-second callback budget.
+      current = createStateEnvelope({ eventId: 'event-slow-deadline', sessionId, state: 'revealed', version: 5 },
+        { ...question(questionId), correctOption: 1 });
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ finalized: true, state: 'revealed', version: 5 }));
+    }
+    res.writeHead(404).end();
+  });
+  const baseUrl = await listen(authority);
+  const sync = startAuthoritySync({ baseUrl, secret: 'test-secret', reconcileMs: 60000, retryBaseMs: 20 });
+  try {
+    await waitFor(() => getCachedState().state === 'revealed', 9000);
+    assert.equal(deadlineCalls, 1, 'a slow successful finalization must have only one caller');
+  } finally {
+    sync?.stop();
+    await close(authority);
+    resetClients();
+  }
+});
+
 test('newer pushed state cancels an older local deadline timer', async () => {
   resetClients();
   const sessionId = '33333333-3333-4333-8333-333333333333';

@@ -45,7 +45,7 @@
             <label><input type="radio" name="active-activity" value="lobby"><span><strong>Welcome screen</strong><small>Large QR code &amp; join instructions.</small></span></label>
             <label><input type="radio" name="active-activity" value="lens"><span><strong>Live Nigeria map</strong><small>Words and phrases appear inside the map.</small></span></label>
             <label><input type="radio" name="active-activity" value="passport"><span><strong>Passport trivia</strong><small>Questions, answers and the combined scores.</small></span></label>
-            <label><input type="radio" name="active-activity" value="decode"><span><strong>Decode the State</strong><small>Reveal one clue at a time.</small></span></label>
+            <label><input type="radio" name="active-activity" value="decode"><span><strong>Decode the State</strong><small>Show all three clues, then open a 30-second vote.</small></span></label>
           </div>
           <p id="screen-message" class="status-message" aria-live="polite"></p>
         </section>
@@ -56,7 +56,7 @@
           <div class="operator-guidance"><span>Waiting for the MC?</span><strong id="operator-guidance">Choose a question now. Press Open question only on the MC’s cue.</strong></div>
           <div class="after-question-actions">
             <button class="button" data-state="leaderboard" id="show-leaderboard">Show Top 10</button>
-            <button class="button secondary" id="next-clue">Open next clue</button>
+            <button class="button secondary hidden" id="next-clue" tabindex="-1" aria-hidden="true">Open next clue</button>
           </div>
           <details class="secondary-controls operator-safety"><summary>Pause the game</summary><div class="toolbar"><button class="button secondary" data-state="paused">Pause everything</button></div></details>
           <p id="admin-message" class="status-message" aria-live="polite"></p>

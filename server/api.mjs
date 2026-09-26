@@ -177,11 +177,10 @@ async function gatewayHealth() {
   }
 }
 
-async function pushGatewayState() {
+async function pushGatewayState(preparedEnvelope = null) {
   if (!gatewayBase()) return;
   publicReads.clear();
-  const response = await buildLiveState(true);
-  const envelope = JSON.parse(response.body);
+  const envelope = preparedEnvelope || JSON.parse((await buildLiveState(true)).body);
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
@@ -198,8 +197,18 @@ async function pushGatewayState() {
 
 async function finalizeReveal(session) {
   const lockedState = JSON.parse((await buildLiveState(true)).body);
+  const revealDataPromise = (async () => {
+    const question = (await db(`quiz_questions?id=eq.${encodeURIComponent(session.current_question_id)}&select=*`))[0];
+    if (!question) throw Object.assign(new Error('Question for reveal was not found'), { status: 503 });
+    const decode = lockedState.activity === 'decode'
+      ? (await db(`decode_state_rounds?round_id=eq.${encodeURIComponent(question.round_id)}&select=clue_media,state_geo_id`))[0]
+      : null;
+    return { question, decode };
+  })().then(value => ({ value }), error => ({ error }));
   await gatewayCall('lock-and-drain', lockedState);
   recordRevealStage(session, 'drain_complete');
+  const revealData = await revealDataPromise;
+  if (revealData.error) throw revealData.error;
   const revealVersion = Number(session.version) + 1;
   const rows = await db(`live_sessions?id=eq.${session.id}&state=eq.locked&version=eq.${session.version}`, {
     method: 'PATCH',
@@ -217,7 +226,25 @@ async function finalizeReveal(session) {
   let broadcasted = false;
   if (gatewayBase()) {
     try {
-      await pushGatewayState();
+      const q = revealData.value.question;
+      const rawQuestion = {
+        ...lockedState.question,
+        media: q.media || lockedState.question?.media,
+        correctOption: q.correct_option,
+        explanation: q.explanation,
+        ...(revealData.value.decode ? {
+          highlightState: revealData.value.decode.state_geo_id,
+          clueMediaSoFar: (revealData.value.decode.clue_media || []).slice(0, Number(revealed.current_clue || 1))
+        } : {})
+      };
+      const revealEnvelope = createStateEnvelope({
+        ...lockedState,
+        state: 'revealed',
+        version: revealVersion,
+        scoreReady: false,
+        serverNow: new Date().toISOString()
+      }, rawQuestion);
+      await pushGatewayState(revealEnvelope);
       recordRevealStage(revealed, 'reveal_broadcast');
       broadcasted = true;
     } catch (error) {
@@ -484,8 +511,11 @@ async function recover(e) {
 
 async function buildLiveState(skipAuto = false) {
   const ev = await event();
-  const settings = (await db(`event_settings?event_id=eq.${ev.id}&select=active_activity,screen_mode`))[0];
-  const sessions = await db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`);
+  const [settingsRows, sessions] = await Promise.all([
+    db(`event_settings?event_id=eq.${ev.id}&select=active_activity,screen_mode`),
+    db(`live_sessions?event_id=eq.${ev.id}&select=*&order=updated_at.desc&limit=1`)
+  ]);
+  const settings = settingsRows[0];
   const s = skipAuto ? sessions[0] : await autoRevealSession(sessions[0]);
   if (!s) {
     const envelope = createStateEnvelope({
@@ -502,8 +532,11 @@ async function buildLiveState(skipAuto = false) {
   if (s.current_question_id && (s.state === 'preparing' || ['open', 'locked', 'revealed', 'leaderboard', 'round_complete'].includes(s.state))) {
     const q = (await db(`quiz_questions?id=eq.${s.current_question_id}&select=*`))[0];
     if (q) {
-      const options = await db(`question_options?question_id=eq.${q.id}&select=option_index,label&order=option_index`);
-      const round = (await db(`quiz_rounds?id=eq.${q.round_id}&select=day,game_id`))[0];
+      const [options, roundRows] = await Promise.all([
+        db(`question_options?question_id=eq.${q.id}&select=option_index,label&order=option_index`),
+        db(`quiz_rounds?id=eq.${q.round_id}&select=day,game_id`)
+      ]);
+      const round = roundRows[0];
       const game = (await db(`quiz_games?id=eq.${round.game_id}&select=activity,title`))[0];
       question = {
         id: q.id,
@@ -522,16 +555,17 @@ async function buildLiveState(skipAuto = false) {
       };
       if (game.activity === 'decode') {
         const d = (await db(`decode_state_rounds?round_id=eq.${q.round_id}&select=clues,clue_media,state_geo_id,reveal_fact`))[0];
-        question.clueNumber = s.current_clue;
-        question.clue = d?.clues?.[s.current_clue - 1] || null;
-        if (d?.clue_media && d.clue_media[s.current_clue - 1]) {
-          question.media = d.clue_media[s.current_clue - 1];
+        question.clueNumber = 3;
+        question.clue = null;
+        if (d?.clue_media?.length) {
+          question.media = d.clue_media[d.clue_media.length - 1];
           question.imageUrl = question.media.src;
           question.altText = question.media.alt;
           question.fallback = question.media.fallback;
         }
-        question.cluesSoFar = (d?.clues || []).slice(0, s.current_clue);
-        question.clueMediaSoFar = (d?.clue_media || []).slice(0, s.current_clue);
+        question.cluesSoFar = d?.clues || [];
+        question.clueMediaSoFar = d?.clue_media || [];
+        question.clueMedia = d?.clue_media || [];
         if (['revealed', 'leaderboard', 'round_complete'].includes(s.state)) {
           question.highlightState = d?.state_geo_id || null;
         }
@@ -690,6 +724,7 @@ async function adminData(e, admin) {
   const responseRow = session?.current_question_id ? (await db(`live_question_state?session_id=eq.${session.id}&question_id=eq.${session.current_question_id}&select=response_count`))[0] : null;
   const gateway = await gatewayHealth();
   return json(200, {
+    serverNow: new Date().toISOString(),
     admin: { id: admin.id, displayName: admin.admin.display_name },
     session,
     settings,
@@ -944,7 +979,7 @@ async function adminAction(e, admin) {
     if (session.state === 'open') return json(409, { error: 'A question is already open.' });
     if (session.state === 'ended') return json(409, { error: 'Return to the welcome screen before opening a question.' });
     const activity = q.quiz_rounds?.quiz_games?.activity || 'passport';
-    const clueNum = activity === 'decode' ? (session.current_question_id === q.id && session.current_clue ? session.current_clue : 3) : 1;
+    const clueNum = activity === 'decode' ? 3 : 1;
     const decodeRows = activity === 'decode'
       ? await db(`decode_state_rounds?round_id=eq.${q.round_id}&select=clues,clue_media,state_geo_id,reveal_fact`)
       : null;
@@ -991,16 +1026,17 @@ async function adminAction(e, admin) {
     };
     if (activity === 'decode') {
       const decode = decodeRows?.[0];
-      question.clueNumber = clueNum;
-      question.clue = decode?.clues?.[clueNum - 1] || null;
-      if (decode?.clue_media?.[clueNum - 1]) {
-        question.media = decode.clue_media[clueNum - 1];
+      question.clueNumber = 3;
+      question.clue = null;
+      if (decode?.clue_media?.length) {
+        question.media = decode.clue_media[decode.clue_media.length - 1];
         question.imageUrl = question.media.src;
         question.altText = question.media.alt;
         question.fallback = question.media.fallback;
       }
-      question.cluesSoFar = (decode?.clues || []).slice(0, clueNum);
-      question.clueMediaSoFar = (decode?.clue_media || []).slice(0, clueNum);
+      question.cluesSoFar = decode?.clues || [];
+      question.clueMediaSoFar = decode?.clue_media || [];
+      question.clueMedia = decode?.clue_media || [];
     }
     const result = json(200, { session: after });
     result.gatewayEnvelope = createStateEnvelope({
@@ -1040,7 +1076,7 @@ async function adminAction(e, admin) {
       body: JSON.stringify({
         current_question_id: q.id,
         current_round_id: q.round_id,
-        current_clue: 1,
+        current_clue: 3,
         state: 'preparing',
         opened_at: null,
         deadline_at: null,

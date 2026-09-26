@@ -7,7 +7,7 @@ import { sanitizePublicQuestion, createStateEnvelope } from '../lib/state-envelo
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 
-test('Decode question selection always begins at Clue 1', async () => {
+test('Decode preparation always exposes all three clues and optimized photos before voting', async () => {
   const decodeRounds = JSON.parse(await readFile(join(root, 'content', 'decode-rounds.json'), 'utf8')).rounds;
   const round = decodeRounds[0];
 
@@ -26,7 +26,7 @@ test('Decode question selection always begins at Clue 1', async () => {
     clueMedia: round.clueMedia
   };
 
-  // When round is selected, session state is 'preparing' and currentClue is 1
+  // The older stored index may be 1, but every clue is visible together.
   const sessionClue = 1;
   const preparedQuestion = {
     ...question,
@@ -39,14 +39,15 @@ test('Decode question selection always begins at Clue 1', async () => {
 
   const sanitized = sanitizePublicQuestion(preparedQuestion, 'preparing');
   assert.ok(sanitized, 'Preparing Decode question must be publicly visible');
-  assert.equal(sanitized.clueNumber, 1, 'Selection must always begin at Clue 1');
-  assert.equal(sanitized.clue, round.clues[0], 'Must show first clue text');
-  assert.equal(sanitized.cluesSoFar.length, 1, 'Only Clue 1 in cluesSoFar');
+  assert.equal(sanitized.cluesSoFar.length, 3, 'Preparation must include all clue text');
+  assert.equal(sanitized.clueMediaSoFar.length, 3, 'Preparation must include all clue photos');
+  assert.deepEqual(sanitized.cluesSoFar, round.clues);
+  assert.deepEqual(sanitized.clueMediaSoFar.map(item => item.src), round.clueMedia.map(item => item.src.replace(/\.jpg$/i, '.webp')));
   assert.deepEqual(sanitized.options, [], 'Options must be empty during preparation');
   assert.equal(sanitized.correctOption, undefined, 'Secret answer must be suppressed');
 });
 
-test('Decode clue progression steps cleanly from Clue 1 -> 2 -> 3', async () => {
+test('Decode preparation stays complete even when the stored clue index is stale', async () => {
   const decodeRounds = JSON.parse(await readFile(join(root, 'content', 'decode-rounds.json'), 'utf8')).rounds;
   const round = decodeRounds[1]; // Kano
 
@@ -57,6 +58,8 @@ test('Decode clue progression steps cleanly from Clue 1 -> 2 -> 3', async () => 
       category: round.zone,
       clueNumber: clueStep,
       clue: round.clues[clueStep - 1],
+      clues: round.clues,
+      clueMedia: round.clueMedia,
       cluesSoFar: round.clues.slice(0, clueStep),
       clueMediaSoFar: round.clueMedia.slice(0, clueStep),
       options: round.options,
@@ -64,9 +67,9 @@ test('Decode clue progression steps cleanly from Clue 1 -> 2 -> 3', async () => 
     };
 
     const sanitized = sanitizePublicQuestion(preparedQuestion, 'preparing');
-    assert.equal(sanitized.clueNumber, clueStep, `Clue number must be ${clueStep}`);
-    assert.equal(sanitized.cluesSoFar.length, clueStep, `Must contain ${clueStep} clues so far`);
-    assert.equal(sanitized.clue, round.clues[clueStep - 1], `Clue text must match step ${clueStep}`);
+    assert.equal(sanitized.cluesSoFar.length, 3, 'Preparing state must not regress to a clue-by-clue view');
+    assert.equal(sanitized.clueMediaSoFar.length, 3, 'Each preparing state must include every clue photo');
+    assert.deepEqual(sanitized.cluesSoFar, round.clues);
   }
 });
 
