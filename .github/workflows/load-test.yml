@@ -29,7 +29,7 @@ on:
         description: 'Answer submission burst window in seconds'
         required: true
         type: number
-        default: 5
+        default: 8
       duplicate_percent:
         description: 'Percentage of participants submitting duplicate retries'
         required: true

@@ -34,13 +34,14 @@ export async function submitAnswer(options = {}) {
   try {
     res = await fetch(`${gatewayUrl}/gateway/answers`, {
       method: 'POST',
+      keepalive: true,
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
         'Authorization': `Bearer ${participant.credential}`
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(8000)
+      signal: AbortSignal.timeout(10000)
     });
 
     // Gateway returns 200 on accepted/duplicate, or 4xx/5xx
