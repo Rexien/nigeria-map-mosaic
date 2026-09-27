@@ -27,3 +27,4 @@ data/*.geojson
 *.db
 *.db-wal
 *.db-shm
+artifacts/
