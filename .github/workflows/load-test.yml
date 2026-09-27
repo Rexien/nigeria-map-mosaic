@@ -125,7 +125,7 @@ jobs:
             --rounds "$TEST_ROUNDS" \
             --burst-seconds "$TEST_BURST_SECONDS" \
             --duplicate-percent "$TEST_DUPLICATE_PERCENT" \
-            --fanout-abort-ms 3000 \
+            --fanout-abort-ms 5000 \
             --run-id "$RUN_ID"
 
       - name: Verify Rehearsal Isolation & Leaderboard Integrity

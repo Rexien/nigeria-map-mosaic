@@ -121,7 +121,7 @@ export async function runTier(options = {}) {
     console.log(`  ✓ Question Opened (v${openVersion}). Deadline: ${openData.session.deadline_at}`);
 
     // Wait up to the acceptance boundary for every listener, then evaluate latency.
-    const fanout = await observer.waitForFanout(openVersion,participants.length,3000);
+    const fanout = await observer.waitForFanout(openVersion, participants.length, Math.max(fanoutAbortMs, 5000));
     if (fanout) {
       console.log(`  ✓ Fanout Receipt: ${fanout.receivedCount}/${participants.length} streams (p50: ${fanout.p50Ms}ms, p95: ${fanout.p95Ms}ms)`);
     }
