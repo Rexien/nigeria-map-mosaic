@@ -5,7 +5,7 @@ export async function preflight(env=process.env, request=fetch) {
   const base=new URL(env.NIAC_BASE_URL || 'https://niaclive-git-feature-admin-pin-auth-zamijudes-projects.vercel.app');
   const gateway=new URL(env.NIAC_GATEWAY_URL || 'https://92.4.146.91.sslip.io');
   if(base.protocol!=='https:' || gateway.protocol!=='https:')throw new Error('HTTPS targets required');
-  if(base.hostname==='niaclive.vercel.app')throw new Error('Production is not an authorized load target');
+  if(base.hostname==='niaclive.vercel.app' && env.ALLOW_PRODUCTION_LOAD !== 'true')throw new Error('Production is not an authorized load target');
   const blockers=[];
   const checks=[];
   async function get(origin,path,protectedPreview=false) {

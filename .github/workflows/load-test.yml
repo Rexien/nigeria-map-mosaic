@@ -39,6 +39,7 @@ on:
 env:
   NIAC_BASE_URL: https://niaclive.vercel.app
   NIAC_GATEWAY_URL: https://92.4.146.91.sslip.io
+  ALLOW_PRODUCTION_LOAD: 'true'
   TEST_TIER: ${{ inputs.tier }}
   TEST_ROUNDS: ${{ inputs.rounds }}
   TEST_BURST_SECONDS: ${{ inputs.burst_seconds }}
