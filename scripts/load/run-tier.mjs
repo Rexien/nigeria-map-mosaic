@@ -126,6 +126,15 @@ export async function runTier(options = {}) {
       console.log(`  ✓ Fanout Receipt: ${fanout.receivedCount}/${participants.length} streams (p50: ${fanout.p50Ms}ms, p95: ${fanout.p95Ms}ms)`);
     }
     if(!fanout || fanout.receivedCount!==participants.length || fanout.p99Ms>fanoutAbortMs)throw new Error('Fanout gate failed; no answer burst sent');
+
+    // Wait until question countdown completes and answers officially open
+    const openedAtMs = openData.session.opened_at ? new Date(openData.session.opened_at).getTime() : 0;
+    const waitToOpen = Math.max(0, openedAtMs - Date.now());
+    if (waitToOpen > 0) {
+      console.log(`  Waiting ${Math.round(waitToOpen)}ms for question start countdown to complete (QUESTION_START_LEAD_MS)...`);
+      await new Promise(res => setTimeout(res, waitToOpen + 200));
+    }
+
     if(deadlineAt-Date.now()<burstSeconds*1000+4000)throw new Error('Insufficient remaining answer window');
 
     // Schedule and dispatch answers
