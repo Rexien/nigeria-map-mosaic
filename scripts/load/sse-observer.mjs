@@ -80,6 +80,7 @@ export class SSEObserverPool {
                   event: currentEvent || 'message',
                   version: parsed.version,
                   state: parsed.state,
+                  scoreReady: parsed.scoreReady === true,
                   activity: parsed.activity,
                   questionId: parsed.question?.id || null,
                   serverNow: parsed.serverNow,

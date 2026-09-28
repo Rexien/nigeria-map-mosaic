@@ -12,6 +12,26 @@ import { verifyDurableAnswers } from './durable.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+async function observeReveal(observer, questionId, deadlineAt, expectedCount, timeoutMs = 6000) {
+  const startedAt = Date.now();
+  let received = new Map();
+  do {
+    received = new Map();
+    for (const event of observer.eventsReceived) {
+      if (event.state === 'revealed' && event.questionId === questionId &&
+          event.receivedAt >= deadlineAt - 1000 && !received.has(event.participantId)) {
+        received.set(event.participantId, event.receivedAt);
+      }
+    }
+    if (received.size >= expectedCount || Date.now() - startedAt >= timeoutMs) break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  } while (true);
+  return {
+    receivedCount: received.size,
+    deadlineToReceiptMs: computeLatencyPercentiles([...received.values()].map(at => at - deadlineAt))
+  };
+}
+
 export async function runTier(options = {}) {
   const env = options.env || process.env;
   const baseUrl = (options.baseUrl || env.NIAC_BASE_URL || 'https://niaclive-git-feature-admin-pin-auth-zamijudes-projects.vercel.app').replace(/\/$/, '');
@@ -222,6 +242,9 @@ export async function runTier(options = {}) {
     if (!revealed) {
       throw new Error('Automatic reveal failed; stopped without forcing success');
     }
+    const revealFanout = await observeReveal(observer, currentQ.id, deadlineAt, participants.length);
+    console.log('  Reveal reached ' + revealFanout.receivedCount + '/' + participants.length +
+      ' SSE listeners; deadline-to-screen p95 ' + revealFanout.deadlineToReceiptMs.p95 + 'ms');
     const durable=await verifyDurableAnswers(submissionResults,env);
     fs.writeFileSync(path.join(outDir,`round-${r+1}-durable.json`),JSON.stringify(durable,null,2));
     const healthResponse=await fetch(`${gatewayUrl}/gateway/health`,{signal:AbortSignal.timeout(5000)});
@@ -231,7 +254,30 @@ export async function runTier(options = {}) {
     // Strict latency goals still fail the final report. Abort the ladder immediately only
     // when latency is severe enough to threaten a live 20-second answer window.
     const severeLatency = latencies.p95 > 10000 || latencies.p99 > 12000 || latencies.max > 15000;
-    console.log(`  ✓ Answer Revealed.`);
+    // Phones request their scores after scoreReady is published, not during snapshot writes.
+    let scoreReady = false;
+    let scorePollCount = 0;
+    while (!scoreReady && scorePollCount < 15) {
+      try {
+        const stateRes = await fetch(`${baseUrl}/api/state`, { headers, signal: AbortSignal.timeout(5000) });
+        if (stateRes.ok) {
+          const stateData = await stateRes.json();
+          if (stateData.state === 'revealed' && stateData.scoreReady === true) scoreReady = true;
+        }
+      } catch {
+        // A failed state read is recorded as delayed readiness, not a successful score.
+      }
+      scorePollCount++;
+      if (!scoreReady && scorePollCount < 15) await new Promise(res => setTimeout(res, 1000));
+    }
+    const readyEvents = observer.eventsReceived.filter(event =>
+      event.state === 'revealed' && event.scoreReady && event.questionId === currentQ.id &&
+      event.receivedAt >= deadlineAt);
+    const scoreReadyAfterDeadlineMs = scoreReady
+      ? (readyEvents.length ? Math.min(...readyEvents.map(event => event.receivedAt)) : Date.now()) - deadlineAt
+      : null;
+    console.log('  Score readiness: ' + (scoreReady ? 'confirmed after ' + scoreReadyAfterDeadlineMs + 'ms' : 'not confirmed within the wait'));
+
     roundReports.push({
       round: r + 1,
       questionId: currentQ.id,
@@ -240,6 +286,9 @@ export async function runTier(options = {}) {
       duplicateCount: duplicates.length,
       durable,
       fanout,
+      revealFanout,
+      scoreReady,
+      scoreReadyAfterDeadlineMs,
       latencies,
       severeLatency
     });
@@ -249,36 +298,46 @@ export async function runTier(options = {}) {
     }
   }
 
-  // 5. Post-Reveal Score Lookup Storm (Spread over 2s with retry per LOAD_TEST_PLAN.md)
-  console.log('\n[Tier Step 5/6] Simulating post-reveal score lookup storm (/api/me reads spread over 2s)...');
+  // Players receive scoreReady together; keep the read burst close to that event.
+  console.log('\n[Tier Step 5/6] Simulating post-reveal score reads over 2s...');
   const readT0 = performance.now();
-  const readPromises = participants.map(async (p, idx) => {
-    // Jittered arrival spread across 2000ms
+  const readPromises = participants.map(async p => {
     const jitterMs = Math.floor(Math.random() * 2000);
     await new Promise(r => setTimeout(r, jitterMs));
-
-    for (let attempt = 0; attempt < 2; attempt++) {
+    const participantStartedAt = performance.now();
+    const outcomes = [];
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const requestStarted=performance.now();
         const res = await fetch(`${baseUrl}/api/me`, {
           headers: { ...headers, 'Authorization': `Bearer ${p.token}` },
-          signal:AbortSignal.timeout(8000)
+          keepalive: true,
+          signal: AbortSignal.timeout(10000)
         });
         await res.arrayBuffer();
-        if (res.status === 200) return {ok:true,durationMs:performance.now()-requestStarted};
-      } catch (err) {
-        if (attempt === 0) {
-          await new Promise(r => setTimeout(r, 200 + Math.random() * 300));
+        outcomes.push('HTTP_' + res.status);
+        if (res.status === 200) {
+          return { ok: true, durationMs: performance.now() - participantStartedAt, attempts: attempt + 1, outcomes };
         }
+      } catch (err) {
+        outcomes.push(err?.cause?.code || err?.name || 'NETWORK_ERROR');
       }
+      if (attempt < 2) await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
     }
-    return {ok:false};
+    return { ok: false, durationMs: performance.now() - participantStartedAt, attempts: 3, outcomes };
   });
   const readResults = await Promise.all(readPromises);
   const readDuration = performance.now() - readT0;
   const readPassCount = readResults.filter(r=>r.ok).length;
+  const readFirstPassCount = readResults.filter(r=>r.ok && r.attempts===1).length;
+  const readRetryCount = readResults.filter(r=>r.attempts>1).length;
+  const readAttemptOutcomes = {};
+  for (const result of readResults) {
+    for (const outcome of result.outcomes) readAttemptOutcomes[outcome] = (readAttemptOutcomes[outcome] || 0) + 1;
+  }
   const readLatencies=computeLatencyPercentiles(readResults.filter(r=>r.ok).map(r=>r.durationMs));
   console.log(`  Score Lookups: ${readPassCount}/${participants.length}; wall time ${readDuration.toFixed(2)}ms; successful-request p95 ${readLatencies.p95}ms (failures counted separately)`);
+  console.log('  First-attempt success: ' + readFirstPassCount + '/' + participants.length +
+    '; retries needed: ' + readRetryCount + '; outcomes: ' + JSON.stringify(readAttemptOutcomes));
 
   // 6. Final Summary & Gate Verification
   console.log('\n[Tier Step 6/6] Compiling tier telemetry and evaluating gates...');
@@ -291,9 +350,18 @@ export async function runTier(options = {}) {
   const zeroLoss = totalFirstAttempts === expectedTotal;
   const p95WithinSla = roundReports.every(r => r.latencies.p95 <= 8000 && r.latencies.p99 <= 10000);
   const fanoutWithinSla = roundReports.every(r => r.fanout.p95Ms <= 4000 && r.fanout.p99Ms <= 5000);
-  const readsWithinSla = readPassCount >= participants.length * 0.95 && (readLatencies.p95 <= 5000 || readPassCount === participants.length);
+  const revealWithinSla = roundReports.every(r =>
+    r.revealFanout.receivedCount === participants.length &&
+    r.revealFanout.deadlineToReceiptMs.p95 <= 2000 &&
+    r.revealFanout.deadlineToReceiptMs.p99 <= 3000);
+  const scoreReadyWithinSla = roundReports.every(r =>
+    r.scoreReady && r.scoreReadyAfterDeadlineMs <= 15000);
+  const readsWithinSla = readPassCount >= Math.ceil(participants.length * 0.95) &&
+    readLatencies.p95 <= 5000;
 
-  const passed = zeroLoss && p95WithinSla && fanoutWithinSla && readsWithinSla && roundReports.every(r => r.durable.passed && !r.severeLatency);
+  const passed = zeroLoss && p95WithinSla && fanoutWithinSla &&
+    revealWithinSla && scoreReadyWithinSla && readsWithinSla &&
+    roundReports.every(r => r.durable.passed && !r.severeLatency);
 
   const report = {
     runId,
@@ -305,9 +373,14 @@ export async function runTier(options = {}) {
     zeroLoss,
     p95WithinSla,
     fanoutWithinSla,
+    revealWithinSla,
+    scoreReadyWithinSla,
     readsWithinSla,
     fanoutAbortMs,
     readPassCount,
+    readFirstPassCount,
+    readRetryCount,
+    readAttemptOutcomes,
     readLatencies,
     certification:'Partial answer-path test only; full scoring, recovery and resource gates remain required',
     telemetrySummary,
@@ -323,6 +396,8 @@ export async function runTier(options = {}) {
   console.log(`  - Zero Loss Gate:  ${zeroLoss ? 'PASS' : 'FAIL'} (${totalFirstAttempts}/${expectedTotal})`);
   console.log(`  - p95 Latency SLA: ${p95WithinSla ? 'PASS' : 'FAIL'}`);
   console.log(`  - Fanout SLA:      ${fanoutWithinSla ? 'PASS' : 'FAIL'}`);
+  console.log(`  - Reveal SLA:      ${revealWithinSla ? 'PASS' : 'FAIL'}`);
+  console.log(`  - Score ready:     ${scoreReadyWithinSla ? 'PASS' : 'FAIL'}`);
   console.log(`  - Score-read SLA:  ${readsWithinSla ? 'PASS' : 'FAIL'}`);
   console.log(`  - Report File:     ${reportPath}`);
   console.log(`=============================================================\n`);
