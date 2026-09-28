@@ -1,4 +1,4 @@
-// Public trivia asset metadata with verified Wikimedia Commons licensing
+// Public trivia asset metadata; Commons credits apply only to sourced photographs.
 const commons = title => `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(title.replaceAll(' ', '_'))}`;
 
 export const triviaAssets = {
@@ -14,14 +14,11 @@ export const triviaAssets = {
     timing: 'reveal'
   },
   suya: {
-    src: '/assets/trivia/09.jpg',
-    title: 'Suya in skewers',
-    author: 'Halima Waziri',
-    license: 'CC BY-SA 4.0',
-    licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
-    source: commons('Suya in skewers.jpg'),
-    alt: 'Seasoned meat skewers prepared over open heat embers.',
-    caption: 'Thinly sliced seasoned meat skewers prepared over open embers.',
+    src: '/assets/trivia/suya-event.png',
+    title: 'Suya skewers',
+    providedBy: 'Event team',
+    alt: 'Spiced meat skewers with cucumber, tomato and onion garnish.',
+    caption: 'Suya skewers served with fresh vegetables.',
     timing: 'reveal'
   },
   adire: {

@@ -20,7 +20,8 @@ const mime = {
   '.svg': 'image/svg+xml',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
-  '.png': 'image/png'
+  '.png': 'image/png',
+  '.webp': 'image/webp'
 };
 
 const routes = {
@@ -363,6 +364,25 @@ for (const vp of matrix) {
     });
     if (!revOk) allPassed = false;
 
+    await navigate(`http://127.0.0.1:${SERVER_PORT}/play?preview=passport-unconfirmed-reveal`);
+    const unconfirmedMetrics = await evaluate(`() => ({
+      title: document.querySelector('.result-notice strong')?.textContent,
+      pending: document.querySelector('.result-notice')?.classList.contains('result-pending'),
+      message: document.querySelector('#answer-message')?.textContent,
+      horizontalScroll: document.documentElement.scrollWidth > document.documentElement.clientWidth
+    })`);
+    const unconfirmedOk = unconfirmedMetrics.pending &&
+      unconfirmedMetrics.title === 'Answer not recorded' &&
+      unconfirmedMetrics.message.includes('No points were awarded') &&
+      !unconfirmedMetrics.horizontalScroll;
+    results.push({
+      viewport: `${vp.name} (${vp.width}×${vp.height})`,
+      test: 'Unconfirmed answer never appears as correct (Mobile)',
+      pass: unconfirmedOk,
+      details: `${unconfirmedMetrics.title}; ${unconfirmedMetrics.message}; H-scroll: ${unconfirmedMetrics.horizontalScroll}`
+    });
+    if (!unconfirmedOk) allPassed = false;
+
     // 3. Mobile Phone Test: Passport Question with Image
     await navigate(`http://127.0.0.1:${SERVER_PORT}/play?preview=passport-image`);
     const imgMetrics = await evaluate(`() => {
@@ -373,17 +393,28 @@ for (const vp of matrix) {
       return {
         hasImg: Boolean(img),
         imgSrc: img ? img.src : null,
+        deliveredSrc: img ? img.currentSrc : null,
         hasHorizontalScroll: scrollWidth > clientWidth
       };
     }`);
-    const imgOk = imgMetrics.hasImg && !imgMetrics.hasHorizontalScroll;
+    const imgOk = imgMetrics.hasImg && imgMetrics.deliveredSrc?.endsWith('/assets/trivia/01-mobile.webp') && !imgMetrics.hasHorizontalScroll;
     results.push({
       viewport: `${vp.name} (${vp.width}×${vp.height})`,
       test: 'Passport Question Image (Mobile)',
       pass: imgOk,
-      details: `Image loaded: ${imgMetrics.hasImg}, H-scroll: ${imgMetrics.hasHorizontalScroll}`
+      details: `Image present: ${imgMetrics.hasImg}, mobile delivery: ${imgMetrics.deliveredSrc?.endsWith('/assets/trivia/01-mobile.webp')}, H-scroll: ${imgMetrics.hasHorizontalScroll}`
     });
     if (!imgOk) allPassed = false;
+
+    await navigate(`http://127.0.0.1:${SERVER_PORT}/play?preview=passport-suya-reveal`);
+    const suyaPhone = await evaluate(`async () => {
+      const img=document.querySelector('.question-image');
+      if(img&&!img.complete)await new Promise(resolve=>{img.onload=resolve;img.onerror=resolve});
+      return {loaded:img?.naturalWidth===225,src:img?.currentSrc,scroll:document.documentElement.scrollWidth>innerWidth+2};
+    }`);
+    const suyaPhoneOk = suyaPhone.loaded && suyaPhone.src?.endsWith('/assets/trivia/suya-event.png') && !suyaPhone.scroll;
+    results.push({viewport:`${vp.name} (${vp.width}×${vp.height})`,test:'Event-provided Suya photo (Mobile reveal)',pass:suyaPhoneOk,details:`Loaded: ${suyaPhone.loaded}, H-scroll: ${suyaPhone.scroll}`});
+    if(!suyaPhoneOk)allPassed=false;
 
     // 4. Mobile Phone Test: every Decode preparing state shows all three clues and photos
     for (const clueStep of [1, 2, 3]) {
@@ -651,6 +682,17 @@ for (const vp of matrix) {
       details: `Fits in viewport: ${displayMetrics.fitsInViewport} (${displayMetrics.scrollHeight}px / ${displayMetrics.innerHeight}px), Winning answer visible: ${displayMetrics.hasWinningAnswer}`
     });
     if (!dispOk) allPassed = false;
+
+    await navigate(`http://127.0.0.1:${SERVER_PORT}/display?preview=passport-suya-reveal`);
+    const suyaStage = await evaluate(`async () => {
+      const img=document.querySelector('.reveal-photo-column .display-photo');
+      if(img&&!img.complete)await new Promise(resolve=>{img.onload=resolve;img.onerror=resolve});
+      const box=img?.getBoundingClientRect();
+      return {loaded:img?.naturalWidth===225,src:img?.currentSrc,fits:box&&box.left>=0&&box.right<=innerWidth&&box.bottom<=innerHeight};
+    }`);
+    const suyaStageOk = suyaStage.loaded && suyaStage.src?.endsWith('/assets/trivia/suya-event.png') && suyaStage.fits;
+    results.push({viewport:`${vp.name} (${vp.width}×${vp.height})`,test:'Event-provided Suya photo (Projector reveal)',pass:suyaStageOk,details:`Loaded: ${suyaStage.loaded}, fits: ${suyaStage.fits}`});
+    if(!suyaStageOk)allPassed=false;
 
     // Projector Test: Decode Question display & Nigeria Map SVG Rendering
     await navigate(`http://127.0.0.1:${SERVER_PORT}/display?preview=decode-voting`);

@@ -51,6 +51,7 @@ body[data-page="play"] .answer-prep-overlay b{display:inline-grid;place-items:ce
 body[data-page="play"] .answers{min-width:0;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:clamp(20px,3.5vw,30px) 0}
 body[data-page="play"] .answer{width:100%;max-width:100%;min-width:0;min-height:72px;padding:16px 18px;font-size:1.05rem;line-height:1.28;white-space:normal;overflow-wrap:anywhere}
 body[data-page="play"] .play-media-card{margin:clamp(14px,2.5vw,22px) 0 0;display:flex;flex-direction:column;gap:8px}
+body[data-page="play"] .play-photo-container picture{display:block;width:100%}
 body[data-page="play"] .play-photo-container{position:relative;width:100%;min-height:clamp(140px, 22vh, 220px);border:2px solid var(--palm);border-radius:8px;background:#f6f8ef;box-shadow:4px 4px 0 var(--sun);overflow:hidden;display:flex;justify-content:center;align-items:center}
 body[data-page="play"] .question-image{display:block;width:100%;max-height:min(34vh,320px);margin:0;border:0;border-radius:0;background:#fff;object-fit:contain}
 body[data-page="play"] .media-fallback-box{display:none;padding:18px 16px;background:var(--chalk);border:2px dashed var(--palm);border-radius:6px;text-align:center;color:var(--palm);font-weight:750;font-size:1rem;line-height:1.4}
@@ -150,6 +151,7 @@ body[data-page="play"] .play-panel.is-decode-play h1{font-size:1.15rem;margin:6p
 .decode-clue-item p strong{display:block;margin-bottom:3px;color:var(--palm);font-size:.76rem;text-transform:uppercase;letter-spacing:.04em}
 .decode-preparing-panel .decode-clues-list{margin-top:14px}
 .decode-preparing-panel .decode-clue-item p{font-size:.9rem}
+.result-notice.result-pending{border-color:#c99800;border-left-color:#c99800;background:#fff9dd}
 @media(max-width:600px){
   body[data-page="play"] .page.narrow{padding:6px 0 16px}
   body[data-page="play"] .play-panel{padding:10px 12px;box-shadow:4px 4px 0 var(--palm)}

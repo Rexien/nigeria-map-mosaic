@@ -74,3 +74,36 @@ test('leaderboard reads latest completed snapshot rather than current screen ver
     else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
   }
 });
+
+test('a participant can verify only their own durable answer after a lost acknowledgement', async () => {
+  const originalFetch = global.fetch;
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_URL = 'https://db.example';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
+  const questionId = '11111111-1111-4111-8111-111111111111';
+  const paths = [];
+  global.fetch = async url => {
+    const path = String(url);
+    paths.push(path);
+    if (path.includes('/participants?')) return new Response(JSON.stringify([{ id: 'player-1', alias: 'Player' }]), { status: 200 });
+    if (path.includes('/gateway_answers?')) {
+      assert.match(path, /participant_id=eq\.player-1/);
+      assert.match(path, new RegExp(`question_id=eq\\.${questionId}`));
+      return new Response(JSON.stringify([{ option_index: 3 }]), { status: 200 });
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  };
+  try {
+    const response = await handler({ httpMethod: 'GET', path: '/api/me/answer', queryStringParameters: { questionId }, headers: { authorization: 'Bearer player-token' } });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(JSON.parse(response.body), { recorded: true, optionIndex: 3 });
+    assert.equal(paths.length, 2);
+  } finally {
+    global.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
+  }
+});

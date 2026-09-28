@@ -68,6 +68,11 @@ export function eligibleLoadQuestions(questions, questionMode = 'any') {
   );
 }
 
+export function participantPhotoPath(src) {
+  const match = String(src).match(/^\/assets\/trivia\/(01|02|03|04|10)\.jpg$/);
+  return match ? `/assets/trivia/${match[1]}-mobile.webp` : src;
+}
+
 export async function runTier(options = {}) {
   const env = options.env || process.env;
   const baseUrl = (options.baseUrl || env.NIAC_BASE_URL || 'https://niaclive-git-feature-admin-pin-auth-zamijudes-projects.vercel.app').replace(/\/$/, '');
@@ -185,7 +190,7 @@ export async function runTier(options = {}) {
     // Consume each body as a stream so a large asset does not exhaust runner RAM.
     let photoProbePromise = null;
     if (questionMode === 'photo') {
-      const imageUrl = new URL(currentQ.media.src, baseUrl);
+      const imageUrl = new URL(participantPhotoPath(currentQ.media.src), baseUrl);
       if (imageUrl.origin !== new URL(baseUrl).origin) throw new Error('Photo URL must use the app origin');
       photoProbePromise = probePhotoDelivery(imageUrl, participants.length, bypassSecret ? { 'x-vercel-protection-bypass': bypassSecret } : {});
       console.log(`  Probing ${participants.length} full image downloads: ${imageUrl.pathname}`);
@@ -294,7 +299,13 @@ export async function runTier(options = {}) {
     const healthResponse=await fetch(`${gatewayUrl}/gateway/health`,{signal:AbortSignal.timeout(5000)});
     if(!healthResponse.ok)throw new Error('Cannot verify drained queue');
     const health=await healthResponse.json();
-    if(!durable.passed || health.queueDepth!==0 || acceptedCount!==participants.length || duplicates.length!==numDuplicates)throw new Error(`Round ${r+1} failed acceptance/durability gates; evidence saved; ladder stopped`);
+    if(!durable.passed || health.queueDepth!==0 || acceptedCount!==participants.length || duplicates.length!==numDuplicates){
+      const photoDelivery = photoProbePromise ? await photoProbePromise : null;
+      const partial = { round:r+1,questionId:currentQ.id,participants:participants.length,acceptedCount,duplicateCount:duplicates.length,durable,queueDepth:health.queueDepth,fanout,revealFanout,latencies,photoDelivery };
+      fs.writeFileSync(path.join(outDir,`round-${r+1}-partial.json`),JSON.stringify(partial,null,2));
+      if(photoDelivery)console.log(`  Photo Delivery: ${photoDelivery.received}/${photoDelivery.requested}; ${photoDelivery.bytesPerImage} bytes each; p95 ${photoDelivery.deliveryMs.p95}ms`);
+      throw new Error(`Round ${r+1} failed acceptance/durability gates; partial evidence saved; ladder stopped`);
+    }
     // Strict latency goals still fail the final report. Abort the ladder immediately only
     // when latency is severe enough to threaten a live 20-second answer window.
     const severeLatency = latencies.p95 > 10000 || latencies.p99 > 12000 || latencies.max > 15000;

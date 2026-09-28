@@ -5,7 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {resolve, extname} from 'node:path';
 export const root = fileURLToPath(new URL('../',import.meta.url));
 export function allowedPath(path) {
-  return /^\/review\/[a-zA-Z0-9_-]+\.(html|js|css)$/.test(path) || /^\/review\/assets\/\d+\.(jpg|png)$/.test(path) || ['/css/app.css','/css/display-screen.css'].includes(path);
+  return /^\/review\/[a-zA-Z0-9_-]+\.(html|js|css)$/.test(path) || /^\/review\/assets\/(?:\d+|suya-event)\.(jpg|png)$/.test(path) || ['/css/app.css','/css/display-screen.css'].includes(path);
 }
 export function createReviewServer() {
   return http.createServer(async(req,res)=>{

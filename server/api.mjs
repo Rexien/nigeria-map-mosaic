@@ -632,6 +632,21 @@ async function me(e) {
   });
 }
 
+async function myAnswer(e) {
+  const p = await participant(e);
+  rateLimit(p.id, 'answer-check', 6, 10000);
+  const url = new URL(e.path || '', 'http://localhost');
+  const questionId = e.queryStringParameters?.questionId || url.searchParams.get('questionId') || '';
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(questionId)) {
+    return json(422, { error: 'A question ID is required.' });
+  }
+  const query = `participant_id=eq.${p.id}&question_id=eq.${questionId}&select=option_index&limit=1`;
+  const gateway = await db(`gateway_answers?${query}`);
+  const legacy = gateway.length ? [] : await db(`participant_answers?${query}`);
+  const answer = gateway[0] || legacy[0];
+  return json(200, { recorded: Boolean(answer), optionIndex: answer?.option_index ?? null });
+}
+
 async function answer(e) {
   const p = await participant(e);
   rateLimit(p.id,'answer', 12, 10000);
@@ -1172,6 +1187,8 @@ export async function handler(e) {
         res = await liveState();
       } else if (method === 'GET' && route === 'me') {
         res = await me(e);
+      } else if (method === 'GET' && route === 'me/answer') {
+        res = await myAnswer(e);
       } else if (method === 'POST' && route === 'answers') {
         res = await answer(e);
       } else if (method === 'POST' && route === 'lens') {

@@ -1,6 +1,6 @@
 (function(){
   const $=(s,p=document)=>p.querySelector(s), $$=(s,p=document)=>[...p.querySelectorAll(s)];
-  const api=()=>window.NIACApi, core=()=>window.NIACCore; const retrying=new Set(); let clockTimer,currentState,clockOffset=0,stateLoading=false,lastDisplayKey='';
+  const api=()=>window.NIACApi, core=()=>window.NIACCore; const retrying=new Set(),reconciling=new Set(); let clockTimer,currentState,clockOffset=0,stateLoading=false,lastDisplayKey='';
   const screenChannel='BroadcastChannel' in window?new BroadcastChannel('niac-screen-sync'):null;
   function message(el,text,error=false){if(!el)return;el.textContent=text||'';el.classList.toggle('error',error)}
   function escape(value){const span=document.createElement('span');span.textContent=value??'';return span.innerHTML}
@@ -51,7 +51,7 @@
     const now=Date.now();
     const basePassport={id:'preview-passport-q1',activity:'passport',title:'Naija Passport Challenge',order:1,day:1,category:'Everyday Nigeria',question:'Which Nigerian tradition brings communities together through music, colour and celebration?',options:['A community festival with music and dance','A very long answer choice included to prove that text wraps cleanly without colliding','A quiet weekday routine','A private meeting with no audience'],correctOption:0,explanation:'Festivals across Nigeria bring together music, dance, clothing, food and community stories.',durationSeconds:30};
     const mediaPassport={...basePassport,id:'preview-passport-q2',order:2,category:'Food and Drink',question:'Zobo is traditionally made from the dried flower calyces of which plant?',options:['Tamarind','Cocoa','Ginger','Hibiscus'],correctOption:3,explanation:'Zobo is brewed from dried hibiscus calyces, usually with spices or other flavourings.',media:{src:'/assets/trivia/10.jpg',alt:'Deep-red botanical calyx growing on a plant.',timing:'reveal'}};
-    const suyaPassport={...basePassport,id:'preview-passport-d2q4',order:4,day:2,category:'Food',question:'Suya is most closely associated with which cooking method?',options:['Steaming','Grilling','Boiling','Baking'],correctOption:1,explanation:'Suya consists of seasoned meat cooked over a grill or open heat.',media:{src:'/assets/trivia/09.jpg',alt:'Seasoned meat skewers prepared over open heat embers.',timing:'reveal'}};
+    const suyaPassport={...basePassport,id:'preview-passport-d2q4',order:4,day:2,category:'Food',question:'Suya is most closely associated with which cooking method?',options:['Steaming','Grilling','Boiling','Baking'],correctOption:1,explanation:'Suya consists of seasoned meat cooked over a grill or open heat.',media:{src:'/assets/trivia/suya-event.png',alt:'Spiced meat skewers with cucumber, tomato and onion garnish.',timing:'reveal'}};
     const qMediaPassport={...basePassport,id:'preview-passport-q3',order:3,category:'Crafts',question:'Which traditional resist-dyed textile heritage is shown in this photograph?',options:['Adire','Aso-oke','Akwa-ocha','Kente'],correctOption:0,explanation:'Adire is the traditional Yoruba resist-dyed indigo textile produced in Abeokuta and across the South West.',media:{src:'/assets/trivia/01.jpg',alt:'Dark fabric with pale circular and geometric patterns.',timing:'question'}};
 
     if(mode==='welcome')return{data:{activity:'passport',screenMode:'welcome',state:'lobby',question:null,responseCount:0,serverNow:new Date().toISOString()},answerIndex:null};
@@ -67,6 +67,7 @@
     if(mode==='passport-timeout'||mode==='timeout')return{data:{activity:'passport',screenMode:'activity',state:'locked',question:basePassport,deadlineAt:new Date(now-1000).toISOString(),responseCount:42,serverNow:new Date().toISOString()},answerIndex:null};
     if(mode==='passport-reveal-only')return{data:{activity:'passport',screenMode:'activity',state:'open',question:{...mediaPassport,media:null,imageUrl:null},deadlineAt:new Date(now+25000).toISOString(),responseCount:20,serverNow:new Date().toISOString()},answerIndex:null};
     if(mode==='passport-reveal'||mode==='reveal')return{data:{activity:'passport',screenMode:'activity',state:'revealed',question:mediaPassport,deadlineAt:new Date(now-5000).toISOString(),responseCount:50,serverNow:new Date().toISOString()},answerIndex:3};
+    if(mode==='passport-unconfirmed-reveal')return{data:{activity:'passport',screenMode:'activity',state:'revealed',question:mediaPassport,deadlineAt:new Date(now-5000).toISOString(),responseCount:50,serverNow:new Date().toISOString()},answerIndex:3,answerConfirmed:false,answerStatus:'not_recorded'};
     if(mode==='passport-suya'||mode==='suya')return{data:{activity:'passport',screenMode:'activity',state:'open',question:{...suyaPassport,media:null,imageUrl:null},deadlineAt:new Date(now+25000).toISOString(),responseCount:20,serverNow:new Date().toISOString()},answerIndex:null};
     if(mode==='passport-suya-reveal'||mode==='suya-reveal')return{data:{activity:'passport',screenMode:'activity',state:'revealed',question:suyaPassport,deadlineAt:new Date(now-5000).toISOString(),responseCount:50,serverNow:new Date().toISOString()},answerIndex:1};
 
@@ -92,13 +93,20 @@
   }
   let lastPlayKey = '', lastDeadline = '', lastKnownScoreText = '', lastKnownRevealText = '';
   let scoredQuestionId = '', scoreRefreshQuestionId = '', scoreRefreshTimer = null;
+  function participantPhotoSrc(src){
+    const match=String(src).match(/^\/assets\/trivia\/(01|02|03|04|10)\.jpg$/);
+    return match?`/assets/trivia/${match[1]}-mobile.webp`:null;
+  }
   function playMediaHTML(q){
     const m=q.media||(q.imageUrl?{src:q.imageUrl,alt:q.altText,timing:'question'}:null);
     if(!m||!m.src)return '';
     const fallback='Image unavailable. Use the question/clue to continue.';
+    const mobileSrc=participantPhotoSrc(m.src);
     return `<figure class="play-media-card">
       <div class="play-photo-container">
+        <picture>${mobileSrc?`<source srcset="${escape(mobileSrc)}" type="image/webp">`:''}
         <img src="${escape(m.src)}" alt="${escape(m.alt||'')}" class="question-image" decoding="async" onerror="this.closest('.play-media-card').classList.add('media-failed')">
+        </picture>
         <div class="media-fallback-box"><p>${fallback}</p></div>
       </div>
     </figure>`;
@@ -132,7 +140,7 @@
       return;
     }
 
-    const q=s.question,revealed=['revealed','leaderboard'].includes(s.state),answered=Number.isInteger(prior?.optionIndex),isCorrect=answered&&q.correctOption===prior.optionIndex;
+    const q=s.question,revealed=['revealed','leaderboard'].includes(s.state),answered=Number.isInteger(prior?.optionIndex),isCorrect=Boolean(prior?.confirmed)&&answered&&q.correctOption===prior.optionIndex;
     const isDecode=q.activity==='decode';
     const clueNum=q.clueNumber||s.currentClue||1;
     const priorOption = prior?.optionIndex ?? 'none';
@@ -148,6 +156,7 @@
       revealed,
       priorOption,
       priorConfirmed,
+      prior?.status || '',
       priorSpectator,
       isSpectator,
       Boolean(s.scoreReady)
@@ -169,10 +178,11 @@
       return;
     }
 
-    const resultTitle=isCorrect?(isDecode?'State Decoded!':'Correct!'):answered?'Not quite':'Time’s up';
+    const unconfirmed=answered&&!priorConfirmed;
+    const resultTitle=unconfirmed?(prior?.status==='not_recorded'?'Answer not recorded':prior?.status==='verification_delayed'?'Could not verify answer':'Checking your answer…'):isCorrect?(isDecode?'State Decoded!':'Correct!'):answered?'Not quite':'Time’s up';
     const picked=answered?`${String.fromCharCode(65+prior.optionIndex)}. ${escape(q.options[prior.optionIndex])}${isDecode?' State':''}`:'';
     const correct=`${String.fromCharCode(65+q.correctOption)}. ${escape(q.options[q.correctOption])}${isDecode?' State':''}`;
-    const resultCopy=isCorrect?`You chose ${correct}.`:answered?`You chose ${picked}. The correct answer is ${correct}.`:`The correct answer is ${correct}.`;
+    const resultCopy=unconfirmed?`You chose ${picked} on this device, but the server did not confirm it. The correct answer is ${correct}.`:isCorrect?`You chose ${correct}.`:answered?`You chose ${picked}. The correct answer is ${correct}.`:`The correct answer is ${correct}.`;
 
     // Mobile Decode: Compact clue tabs so answer options A-D are immediately visible above the fold
     const decodeCluesHTML = isDecode && q.cluesSoFar?.length ? decodeClueCardsHTML(q, 'decode-clues-list decode-clues-phone') : playMediaHTML(q, revealed);
@@ -189,10 +199,10 @@
       </div>
       <h1>${escape(isDecode?'Which Nigerian state do these clues describe?':(q.clue||q.question))}</h1>
       ${prepOverlay}
-      ${revealed?`<div class="notice result-notice ${isCorrect?'result-correct':'result-wrong'}" role="status"><strong>${resultTitle}</strong><span>${resultCopy}</span><small>${escape(q.explanation||'')}</small></div>`:''}
+      ${revealed?`<div class="notice result-notice ${unconfirmed?'result-pending':isCorrect?'result-correct':'result-wrong'}" role="status"><strong>${resultTitle}</strong><span>${resultCopy}</span><small>${escape(q.explanation||'')}</small></div>`:''}
       ${decodeCluesHTML}
       <div class="answers">
-        ${q.options.map((o,i)=>`<button class="answer ${prior?.optionIndex===i?'selected':''} ${prior?.confirmed?'confirmed':''} ${revealed&&q.correctOption===i?'correct':''} ${revealed&&answered&&prior.optionIndex===i&&!isCorrect?'incorrect':''}" data-option="${i}" ${s.state!=='open'||prior||startsIn(s)>0?'disabled':''}>${String.fromCharCode(65+i)}. ${escape(o)}${isDecode?' State':''}</button>`).join('')}
+        ${q.options.map((o,i)=>`<button class="answer ${prior?.optionIndex===i?'selected':''} ${prior?.confirmed?'confirmed':''} ${revealed&&q.correctOption===i?'correct':''} ${revealed&&priorConfirmed&&answered&&prior.optionIndex===i&&!isCorrect?'incorrect':''}" data-option="${i}" ${s.state!=='open'||prior||startsIn(s)>0?'disabled':''}>${String.fromCharCode(65+i)}. ${escape(o)}${isDecode?' State':''}</button>`).join('')}
       </div>
       ${isDecode ? `
         <details class="decode-map-drawer">
@@ -200,7 +210,7 @@
           <div id="play-map-container"></div>
         </details>
       ` : ''}
-      <p id="answer-message" class="muted" aria-live="polite">${prior?.confirmed?(prior?.spectator||isSpectator?'Answer recorded · Spectator mode':'Answer received — locked in.'):prior&&s.state==='open'?'Connection interrupted — keeping your answer and retrying.':s.state==='open'?(startsIn(s)>0?`Answers open in ${startsIn(s)} seconds — get ready.`:isSpectator?'Choose one answer for interactive practice (Spectator mode).':'Select your answer above. Once received, it cannot be changed.'):'Answers are closed.'}</p>
+      <p id="answer-message" class="muted" aria-live="polite">${prior?.confirmed?(prior?.spectator||isSpectator?'Answer recorded · Spectator mode':'Answer received — locked in.'):prior&&revealed?(prior.status==='not_recorded'?'Your answer was not recorded. No points were awarded.':prior.status==='verification_delayed'?'We could not verify your answer. Check your Passport score later.':'Checking whether your answer was recorded…'):prior&&s.state==='open'?'Connection interrupted — keeping your answer and retrying.':s.state==='open'?(startsIn(s)>0?`Answers open in ${startsIn(s)} seconds — get ready.`:isSpectator?'Choose one answer for interactive practice (Spectator mode).':'Select your answer above. Once received, it cannot be changed.'):'Answers are closed.'}</p>
       <p id="personal-live-score" class="muted"></p>
     </div>`;
 
@@ -239,6 +249,39 @@
       score.textContent=lastKnownScoreText||'Your event score updates after the round.';
     }
     if(prior&&!prior.confirmed&&s.state==='open')retryPending(prior,s);
+    if(prior&&!prior.confirmed&&revealed&&!prior.status)reconcilePending(prior,s);
+  }
+  async function reconcilePending(pending,s){
+    const key=`niac-answer-${s.question.id}`;
+    if(reconciling.has(key))return;
+    reconciling.add(key);
+    try{
+      let result;
+      for(let attempt=0;attempt<3;attempt++){
+        try{result=await api().request(`/me/answer?questionId=${encodeURIComponent(s.question.id)}`,{timeout:7000,retry:false});break}
+        catch(err){if(attempt===2)throw err;await new Promise(resolve=>setTimeout(resolve,1500*(attempt+1)))}
+      }
+      const current=JSON.parse(localStorage.getItem(key)||'null');
+      if(!current||current.confirmed||current.idempotencyKey!==pending.idempotencyKey)return;
+      if(result.recorded){current.confirmed=true;current.optionIndex=result.optionIndex;delete current.status}
+      else current.status='not_recorded';
+      localStorage.setItem(key,JSON.stringify(current));
+      lastPlayKey='';
+      if(currentState?.question?.id===s.question.id){
+        renderPlay(currentState);
+        if(result.recorded&&currentState.scoreReady&&scoreRefreshQuestionId===s.question.id){
+          clearTimeout(scoreRefreshTimer);
+          updateLiveScore(s.question.id,Number(currentState.version));
+        }
+      }
+    }catch{
+      const current=JSON.parse(localStorage.getItem(key)||'null');
+      if(current&&!current.confirmed&&current.idempotencyKey===pending.idempotencyKey){
+        current.status='verification_delayed';localStorage.setItem(key,JSON.stringify(current));
+        lastPlayKey='';
+        if(currentState?.question?.id===s.question.id)renderPlay(currentState);
+      }
+    }finally{reconciling.delete(key)}
   }
   async function updateLiveScore(questionId, expectedSnapshotVersion, attempt=0){
     if(scoreRefreshQuestionId!==questionId)return;
@@ -342,6 +385,7 @@
 
     try{
       const res=await api().request('/answers',{method:'POST',body:{sessionId:s.sessionId,questionId:s.question.id,optionIndex,idempotencyKey:pending.idempotencyKey}});
+      if(!res?.accepted&&!res?.recorded&&!res?.spectator)throw new Error('The server did not confirm this answer.');
       pending.confirmed=true;
       if(res?.spectator||api().getProfile()?.isSpectator)pending.spectator=true;
       localStorage.setItem(key,JSON.stringify(pending));
@@ -361,6 +405,7 @@
     const key=`niac-answer-${s.question.id}`;if(retrying.has(key)||remaining(s)<=0||startsIn(s)>0)return;retrying.add(key);
     try{
       const res=await api().request('/answers',{method:'POST',body:{sessionId:s.sessionId,questionId:s.question.id,optionIndex:pending.optionIndex,idempotencyKey:pending.idempotencyKey}});
+      if(!res?.accepted&&!res?.recorded&&!res?.spectator)throw new Error('The server did not confirm this answer.');
       pending.confirmed=true;if(res?.spectator||api().getProfile()?.isSpectator)pending.spectator=true;
       localStorage.setItem(key,JSON.stringify(pending));
       $$('.answer').forEach(b=>{if(b.classList.contains('selected'))b.classList.add('confirmed')});
@@ -376,7 +421,7 @@
   function initPlay(){
     const preview=localPreview();
     if(preview){
-      if(Number.isInteger(preview.answerIndex))localStorage.setItem(`niac-answer-${preview.data.question.id}`,JSON.stringify({optionIndex:preview.answerIndex,confirmed:true}));
+      if(Number.isInteger(preview.answerIndex))localStorage.setItem(`niac-answer-${preview.data.question.id}`,JSON.stringify({optionIndex:preview.answerIndex,confirmed:preview.answerConfirmed!==false,status:preview.answerStatus}));
       applyState(preview.data);
       return;
     }

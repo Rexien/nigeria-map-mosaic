@@ -34,7 +34,8 @@ test('wrong answers and timeouts get zero points; selection locks without reveal
 });
 test('all included assets exist and carry source, author, licence and neutral alt text',async()=>{
   for(const q of questions.filter(q=>q.media)){
-    assert.ok(q.media.source.startsWith('https://'));assert.ok(q.media.author);assert.ok(q.media.licenseUrl);
+    if(q.media.providedBy)assert.equal(q.media.providedBy,'Event team');
+    else {assert.ok(q.media.source.startsWith('https://'));assert.ok(q.media.author);assert.ok(q.media.licenseUrl);}
     assert.ok((await stat(new URL('..'+q.media.src,import.meta.url))).size>1000);
     if(q.media.timing==='question')assert.ok(q.fallback);
   }
@@ -42,6 +43,7 @@ test('all included assets exist and carry source, author, licence and neutral al
   assert.equal(mediaHTML(fake,false),'');
 });
 test('server exposes only preview assets and styles, never live APIs or secrets',async()=>{
+  assert.equal(allowedPath('/review/assets/suya-event.png'),true);
   for(const path of ['/api/admin/action','/.env','/config.js','/content/questions.json','/review/../.env','/js/app.js'])assert.equal(allowedPath(path),false);
   const server=createReviewServer();await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   try{
