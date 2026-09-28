@@ -38,7 +38,7 @@ const getArg = (flag, def) => {
 const BASE_URL = (getArg('--base-url') || process.env.NIAC_BASE_URL || 'https://niaclive.vercel.app').replace(/\/$/, '');
 const GATEWAY_URL = (getArg('--gateway-url') || process.env.NIAC_GATEWAY_URL || 'https://92.4.146.91.sslip.io').replace(/\/$/, '');
 const ADMIN_PIN = process.env.ADMIN_PIN || '19601960';
-const BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET || 'ZeNZGMB1XMEfKoZWSluv10tr5WXh5riF';
+const BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET || '';
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ptgrcseudavkaviwdgzo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 

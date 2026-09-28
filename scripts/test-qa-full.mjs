@@ -368,12 +368,12 @@ try {
     { name: 'Player Controller (Answered Locked)', path: '/play?preview=passport-answered', expected: '.answers, .answer, .play-panel' },
     { name: 'Player Controller (Revealed)', path: '/play?preview=passport-reveal', expected: '.notice, .answers, .play-panel' },
     { name: 'Player Controller (Decode Mode)', path: '/play?preview=decode-clue1', expected: '.decode-preparing-panel, .clue-card, .play-panel' },
-    { name: 'Digital Passport', path: '/passport', expected: '#passport-name, .score-strip, .stamps' },
+    { name: 'Digital Passport requires joining first', path: '/passport', expected: '#join-form' },
     { name: 'Stage Display (Welcome)', path: '/display?preview=welcome', expected: '#display-root, .display-welcome' },
     { name: 'Stage Display (Passport Reveal)', path: '/display?preview=passport-reveal', expected: '#display-root, .display-question' },
     { name: 'Stage Display (Leaderboard)', path: '/display?preview=leaderboard', expected: '#display-root, .display-question, .leaderboard-table' },
     { name: 'Live Word Mosaic Stage', path: '/lens/live', expected: '#map-svg, #words-layer, #display-container' },
-    { name: 'Admin Console', path: '/admin', expected: '#pin, #login-form, .admin-login-panel' }
+    { name: 'Admin Console', path: '/admin', expected: '#admin-login, #admin-pin' }
   ];
 
   console.log('[QA Runner] Verifying all platform screens...');
@@ -404,8 +404,10 @@ try {
 
   // 4. Live Deployed Preview Speed & Reveal Verification
   console.log('[QA Runner] Measuring live deployed preview latency...');
-  const PREVIEW_BASE = 'https://niaclive-git-codex-live-timer-ux-zamijudes-projects.vercel.app';
-  const BYPASS_HEADER = { 'x-vercel-protection-bypass': 'ZeNZGMB1XMEfKoZWSluv10tr5WXh5riF' };
+  const PREVIEW_BASE = process.env.NIAC_QA_PREVIEW_BASE || 'https://niaclive.vercel.app';
+  const BYPASS_HEADER = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+    ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET }
+    : {};
 
   const t0 = performance.now();
   const healthRes = await fetch(`${PREVIEW_BASE}/api/health`, { headers: BYPASS_HEADER });
@@ -420,7 +422,7 @@ try {
   };
 
   report.summary = {
-    status: report.questionsAudit.failures.length === 0 ? 'PASSED' : 'ACTION_REQUIRED',
+    status: report.questionsAudit.failures.length === 0 && report.screensAudit.every(s => s.ok) ? 'PASSED' : 'ACTION_REQUIRED',
     totalQuestionsVerified: report.questionsAudit.allQuestionsTested,
     decodeClueImagesVerified: decodeAssetsStatus.length,
     screensVerified: report.screensAudit.length,
