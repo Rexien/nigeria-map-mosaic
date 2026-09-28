@@ -238,6 +238,8 @@ for (const vp of matrix) {
   await setViewport(vp.width, vp.height, vp.isMobile);
 
   if (vp.isMobile) {
+    await navigate(`http://127.0.0.1:${SERVER_PORT}/play?preview=passport-text`);
+    await evaluate(`() => localStorage.removeItem('niac-answer-preview-passport-q1')`);
     await navigate(`http://127.0.0.1:${SERVER_PORT}/play?preview=passport-starting`);
     const beforeStart = await evaluate(`() => ({
       timer: Number(document.querySelector('#timer')?.textContent),
@@ -415,6 +417,28 @@ for (const vp of matrix) {
     const suyaPhoneOk = suyaPhone.loaded && suyaPhone.src?.endsWith('/assets/trivia/suya-event.png') && !suyaPhone.scroll;
     results.push({viewport:`${vp.name} (${vp.width}×${vp.height})`,test:'Event-provided Suya photo (Mobile reveal)',pass:suyaPhoneOk,details:`Loaded: ${suyaPhone.loaded}, H-scroll: ${suyaPhone.scroll}`});
     if(!suyaPhoneOk)allPassed=false;
+
+    await navigate(`http://127.0.0.1:${SERVER_PORT}/play?preview=passport-text`);
+    await evaluate(`() => localStorage.removeItem('niac-answer-preview-passport-q1')`);
+    await navigate(`http://127.0.0.1:${SERVER_PORT}/play?preview=passport-text`);
+    const retryResult = await evaluate(`async () => {
+      let calls=0;
+      window.NIACApi.request=async path=>{
+        if(path==='/answers'){
+          calls++;
+          if(calls===1)throw new Error('Temporary connection loss');
+          return {accepted:true,answerId:'confirmed-after-retry'};
+        }
+        throw new Error('Unexpected request: '+path);
+      };
+      document.querySelector('.answer').click();
+      await new Promise(resolve=>setTimeout(resolve,1800));
+      const saved=JSON.parse(localStorage.getItem('niac-answer-preview-passport-q1')||'null');
+      return {calls,confirmed:saved?.confirmed,message:document.querySelector('#answer-message')?.textContent};
+    }`);
+    const retryOk=retryResult.calls===2&&retryResult.confirmed&&retryResult.message.includes('confirmed');
+    results.push({viewport:`${vp.name} (${vp.width}×${vp.height})`,test:'Saved answer retries after transient failure (Mobile)',pass:retryOk,details:`Requests: ${retryResult.calls}, confirmed: ${retryResult.confirmed}`});
+    if(!retryOk)allPassed=false;
 
     // 4. Mobile Phone Test: every Decode preparing state shows all three clues and photos
     for (const clueStep of [1, 2, 3]) {

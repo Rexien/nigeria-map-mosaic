@@ -1,6 +1,6 @@
 (function(){
   const $=(s,p=document)=>p.querySelector(s), $$=(s,p=document)=>[...p.querySelectorAll(s)];
-  const api=()=>window.NIACApi, core=()=>window.NIACCore; const retrying=new Set(),reconciling=new Set(); let clockTimer,currentState,clockOffset=0,stateLoading=false,lastDisplayKey='';
+  const api=()=>window.NIACApi, core=()=>window.NIACCore; const retrying=new Set(),reconciling=new Set(),retryTimers=new Map(),retryAttempts=new Map(); let clockTimer,currentState,clockOffset=0,stateLoading=false,lastDisplayKey='';
   const screenChannel='BroadcastChannel' in window?new BroadcastChannel('niac-screen-sync'):null;
   function message(el,text,error=false){if(!el)return;el.textContent=text||'';el.classList.toggle('error',error)}
   function escape(value){const span=document.createElement('span');span.textContent=value??'';return span.innerHTML}
@@ -381,25 +381,43 @@
     // Update structural key so duplicate state does not wipe selection
     const clueNum = s.question.clueNumber||s.currentClue||1;
     const isSpectator = Boolean(api().getProfile()?.isSpectator);
-    lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, optionIndex, false, false, isSpectator, Boolean(s.scoreReady)].join('|');
+    lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, optionIndex, false, '', false, isSpectator, Boolean(s.scoreReady)].join('|');
 
     try{
       const res=await api().request('/answers',{method:'POST',body:{sessionId:s.sessionId,questionId:s.question.id,optionIndex,idempotencyKey:pending.idempotencyKey}});
       if(!res?.accepted&&!res?.recorded&&!res?.spectator)throw new Error('The server did not confirm this answer.');
       pending.confirmed=true;
+      clearPendingRetry(key);
       if(res?.spectator||api().getProfile()?.isSpectator)pending.spectator=true;
       localStorage.setItem(key,JSON.stringify(pending));
       // In-place confirmation update
       buttons.forEach(b=>{if(b.classList.contains('selected'))b.classList.add('confirmed')});
-      lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, optionIndex, true, Boolean(pending.spectator), isSpectator, Boolean(s.scoreReady)].join('|');
+      lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, optionIndex, true, '', Boolean(pending.spectator), isSpectator, Boolean(s.scoreReady)].join('|');
       message($('#answer-message'),pending.spectator?'Practice answer only · Spectator mode':'Answer received — locked in.');
     }
     catch(err){
-      if(err.code==='ANSWER_LATE'||err.code==='QUESTION_NOT_OPEN'){
-        localStorage.removeItem(key);
-        message($('#answer-message'),'Answers are closed. Your answer was not counted.',true);
-      }else message($('#answer-message'),'Connection interrupted — your choice is saved and will retry automatically.',true);
+      if(remaining(s)>0&&err.code!=='ANSWER_LATE'&&err.code!=='QUESTION_NOT_OPEN'){
+        message($('#answer-message'),'Connection interrupted — your choice is saved and retrying automatically.',true);
+        schedulePendingRetry(pending,s);
+      }else message($('#answer-message'),'Answers closed — checking whether your choice was recorded.',true);
     }
+  }
+  function clearPendingRetry(key){
+    clearTimeout(retryTimers.get(key));retryTimers.delete(key);retryAttempts.delete(key);
+  }
+  function schedulePendingRetry(pending,s){
+    const key=`niac-answer-${s.question.id}`;
+    const live=currentState;
+    if(retryTimers.has(key)||live?.state!=='open'||live.question?.id!==s.question.id||remaining(live)<=0)return;
+    const attempt=retryAttempts.get(key)||0;
+    if(attempt>=3)return;
+    retryAttempts.set(key,attempt+1);
+    const delay=Math.min(2500,500*2**attempt)+Math.floor(Math.random()*250);
+    retryTimers.set(key,setTimeout(()=>{
+      retryTimers.delete(key);
+      const latest=currentState;
+      if(latest?.state==='open'&&latest.question?.id===s.question.id&&remaining(latest)>0)retryPending(pending,latest);
+    },delay));
   }
   async function retryPending(pending,s){
     const key=`niac-answer-${s.question.id}`;if(retrying.has(key)||remaining(s)<=0||startsIn(s)>0)return;retrying.add(key);
@@ -407,15 +425,18 @@
       const res=await api().request('/answers',{method:'POST',body:{sessionId:s.sessionId,questionId:s.question.id,optionIndex:pending.optionIndex,idempotencyKey:pending.idempotencyKey}});
       if(!res?.accepted&&!res?.recorded&&!res?.spectator)throw new Error('The server did not confirm this answer.');
       pending.confirmed=true;if(res?.spectator||api().getProfile()?.isSpectator)pending.spectator=true;
+      clearPendingRetry(key);
       localStorage.setItem(key,JSON.stringify(pending));
       $$('.answer').forEach(b=>{if(b.classList.contains('selected'))b.classList.add('confirmed')});
       const clueNum = s.question.clueNumber||s.currentClue||1;
       const isSpectator = Boolean(api().getProfile()?.isSpectator);
-      lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, pending.optionIndex, true, Boolean(pending.spectator), isSpectator, Boolean(s.scoreReady)].join('|');
+      lastPlayKey = [s.activity, s.state, s.question.id, clueNum, false, false, pending.optionIndex, true, '', Boolean(pending.spectator), isSpectator, Boolean(s.scoreReady)].join('|');
       message($('#answer-message'),pending.spectator?'Answer recorded · Spectator mode':'Answer confirmed by the server.');
     }catch(err){
-      if(err.code==='ANSWER_LATE'||err.code==='QUESTION_NOT_OPEN')localStorage.removeItem(key);
-      message($('#answer-message'),err.message,true);
+      if(remaining(s)>0&&err.code!=='ANSWER_LATE'&&err.code!=='QUESTION_NOT_OPEN'){
+        message($('#answer-message'),'Connection interrupted — retrying your saved choice.',true);
+        schedulePendingRetry(pending,s);
+      }else message($('#answer-message'),'Answers closed — checking whether your choice was recorded.',true);
     }finally{retrying.delete(key);}
   }
   function initPlay(){
