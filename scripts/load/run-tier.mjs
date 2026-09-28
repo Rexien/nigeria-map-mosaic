@@ -32,6 +32,42 @@ async function observeReveal(observer, questionId, deadlineAt, expectedCount, ti
   };
 }
 
+async function probePhotoDelivery(url, count, headers) {
+  const startedAt = performance.now();
+  const results = await Promise.all(Array.from({ length: count }, async () => {
+    try {
+      const response = await fetch(url, { headers, signal: AbortSignal.timeout(30000) });
+      if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) {
+        throw new Error(`Unexpected image response: HTTP ${response.status}`);
+      }
+      let bytes = 0;
+      for await (const chunk of response.body) bytes += chunk.byteLength;
+      if (bytes === 0) throw new Error('Empty image response');
+      return { ok: true, bytes, elapsedMs: performance.now() - startedAt };
+    } catch (error) {
+      return { ok: false, error: error.message, elapsedMs: performance.now() - startedAt };
+    }
+  }));
+  const successes = results.filter(result => result.ok);
+  const failures = results.filter(result => !result.ok);
+  return {
+    requested: count,
+    received: successes.length,
+    bytesPerImage: successes[0]?.bytes || 0,
+    totalBytes: successes.reduce((sum, result) => sum + result.bytes, 0),
+    deliveryMs: computeLatencyPercentiles(successes.map(result => result.elapsedMs)),
+    failures: failures.slice(0, 10).map(result => result.error)
+  };
+}
+
+export function eligibleLoadQuestions(questions, questionMode = 'any') {
+  return questions.filter(q =>
+    (q.reviewStatus === 'approved' || q.review_status === 'approved') &&
+    !(q.isVoid ?? q.is_void ?? false) &&
+    (questionMode !== 'photo' || (q.activity === 'passport' && q.media?.src && q.media.timing === 'question'))
+  );
+}
+
 export async function runTier(options = {}) {
   const env = options.env || process.env;
   const baseUrl = (options.baseUrl || env.NIAC_BASE_URL || 'https://niaclive-git-feature-admin-pin-auth-zamijudes-projects.vercel.app').replace(/\/$/, '');
@@ -53,11 +89,12 @@ export async function runTier(options = {}) {
   const burstSeconds = Number(options.burstSeconds || 5);
   const duplicatePercent = Number(options.duplicatePercent || 10);
   const rounds = Number(options.rounds || 1);
+  const questionMode = options.questionMode || 'any';
   const fanoutAbortMs = Number(options.fanoutAbortMs || 2000);
   const adminPin = options.adminPin || env.ADMIN_PIN;
   if(!adminPin)throw new Error('ADMIN_PIN is required');
   if(!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY)throw new Error('Refusing load without durable verification credentials');
-  if(!Number.isInteger(rounds)||rounds<1||!Number.isInteger(targetParticipants)||targetParticipants<1||participants.length!==targetParticipants||burstSeconds<1||duplicatePercent<0||duplicatePercent>100||fanoutAbortMs<2000)throw new Error('Invalid tier parameters');
+  if(!Number.isInteger(rounds)||rounds<1||!Number.isInteger(targetParticipants)||targetParticipants<1||participants.length!==targetParticipants||burstSeconds<1||duplicatePercent<0||duplicatePercent>100||fanoutAbortMs<2000||!['any','photo'].includes(questionMode))throw new Error('Invalid tier parameters');
   if(manifest.baseUrl!==baseUrl || manifest.gatewayUrl!==gatewayUrl)throw new Error('Manifest target mismatch');
   const bypassSecret = env.VERCEL_AUTOMATION_BYPASS_SECRET || null;
 
@@ -100,10 +137,7 @@ export async function runTier(options = {}) {
   const statusData = await statusRes.json();
   const sessionId = statusData.session?.id;
   const questions = statusData.questions || [];
-  const approvedQuestions = questions.filter(q => 
-    (q.reviewStatus === 'approved' || q.review_status === 'approved') && 
-    !(q.isVoid ?? q.is_void ?? false)
-  );
+  const approvedQuestions = eligibleLoadQuestions(questions, questionMode);
 
   if (!approvedQuestions.length) throw new Error('No approved questions found');
   if(rounds>approvedQuestions.length)throw new Error('Cannot reuse questions for the same participant identities');
@@ -146,6 +180,16 @@ export async function runTier(options = {}) {
       console.log(`  ✓ Fanout Receipt: ${fanout.receivedCount}/${participants.length} streams (p50: ${fanout.p50Ms}ms, p95: ${fanout.p95Ms}ms)`);
     }
     if(!fanout || fanout.receivedCount!==participants.length || fanout.p99Ms>fanoutAbortMs)throw new Error('Fanout gate failed; no answer burst sent');
+
+    // In photo mode, emulate every phone fetching the question image after state fanout.
+    // Consume each body as a stream so a large asset does not exhaust runner RAM.
+    let photoProbePromise = null;
+    if (questionMode === 'photo') {
+      const imageUrl = new URL(currentQ.media.src, baseUrl);
+      if (imageUrl.origin !== new URL(baseUrl).origin) throw new Error('Photo URL must use the app origin');
+      photoProbePromise = probePhotoDelivery(imageUrl, participants.length, bypassSecret ? { 'x-vercel-protection-bypass': bypassSecret } : {});
+      console.log(`  Probing ${participants.length} full image downloads: ${imageUrl.pathname}`);
+    }
 
     // Wait until question countdown completes and answers officially open
     const openedAtMs = openData.session.opened_at ? new Date(openData.session.opened_at).getTime() : 0;
@@ -278,9 +322,12 @@ export async function runTier(options = {}) {
       : null;
     console.log('  Score readiness: ' + (scoreReady ? 'confirmed after ' + scoreReadyAfterDeadlineMs + 'ms' : 'not confirmed within the wait'));
 
+    const photoDelivery = photoProbePromise ? await photoProbePromise : null;
+    if (photoDelivery) console.log(`  Photo Delivery: ${photoDelivery.received}/${photoDelivery.requested}; ${photoDelivery.bytesPerImage} bytes each; p95 ${photoDelivery.deliveryMs.p95}ms`);
     roundReports.push({
       round: r + 1,
       questionId: currentQ.id,
+      photoDelivery,
       participants: participants.length,
       acceptedCount,
       duplicateCount: duplicates.length,
@@ -362,9 +409,11 @@ export async function runTier(options = {}) {
     r.scoreReady && r.scoreReadyAfterDeadlineMs <= 15000);
   const readsWithinSla = readPassCount >= Math.ceil(participants.length * 0.95) &&
     readLatencies.p95 <= 5000 && readVisibleLatencies.p95 <= 18000;
+  const photosWithinSla = questionMode !== 'photo' || roundReports.every(r =>
+    r.photoDelivery?.received === participants.length && r.photoDelivery.deliveryMs.p95 <= 5000);
 
   const passed = zeroLoss && p95WithinSla && fanoutWithinSla &&
-    revealWithinSla && scoreReadyWithinSla && readsWithinSla &&
+    revealWithinSla && scoreReadyWithinSla && readsWithinSla && photosWithinSla &&
     roundReports.every(r => r.durable.passed && !r.severeLatency);
 
   const report = {
@@ -374,12 +423,14 @@ export async function runTier(options = {}) {
     rounds,
     burstSeconds,
     duplicatePercent,
+    questionMode,
     zeroLoss,
     p95WithinSla,
     fanoutWithinSla,
     revealWithinSla,
     scoreReadyWithinSla,
     readsWithinSla,
+    photosWithinSla,
     fanoutAbortMs,
     readPassCount,
     readFirstPassCount,
@@ -404,6 +455,7 @@ export async function runTier(options = {}) {
   console.log(`  - Reveal SLA:      ${revealWithinSla ? 'PASS' : 'FAIL'}`);
   console.log(`  - Score ready:     ${scoreReadyWithinSla ? 'PASS' : 'FAIL'}`);
   console.log(`  - Score-read SLA:  ${readsWithinSla ? 'PASS' : 'FAIL'}`);
+  if (questionMode === 'photo') console.log(`  - Photo delivery:  ${photosWithinSla ? 'PASS' : 'FAIL'}`);
   console.log(`  - Report File:     ${reportPath}`);
   console.log(`=============================================================\n`);
 
@@ -426,10 +478,11 @@ if (process.argv[1] && process.argv[1].endsWith('run-tier.mjs')) {
   const burstSeconds = Number(getArg('--burst-seconds', 5));
   const duplicatePercent = Number(getArg('--duplicate-percent', 10));
   const rounds = Number(getArg('--rounds', 1));
+  const questionMode = getArg('--question-mode', 'any');
   const fanoutAbortMs = Number(getArg('--fanout-abort-ms', 2000));
   const runId = getArg('--run-id', process.env.NIAC_RUN_ID || `rehearsal-${Date.now()}`);
 
-  runTier({ participants, burstSeconds, duplicatePercent, rounds, fanoutAbortMs, runId })
+  runTier({ participants, burstSeconds, duplicatePercent, rounds, questionMode, fanoutAbortMs, runId })
     .then(report => process.exit(report.passed ? 0 : 1))
     .catch(err => {
       console.error('[Run-Tier Error]', err);
