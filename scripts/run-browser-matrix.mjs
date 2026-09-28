@@ -3,7 +3,7 @@
 
 import { spawn } from 'node:child_process';
 import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -178,7 +178,8 @@ async function setViewport(width, height, isMobile = false) {
 async function evaluate(fnStr) {
   const res = await cdpSend('Runtime.evaluate', {
     expression: `(${fnStr})()`,
-    returnByValue: true
+    returnByValue: true,
+    awaitPromise: true
   });
   return res.result?.value;
 }
@@ -193,6 +194,39 @@ const matrix = [
   { name: 'Projector WXGA', width: 1366, height: 768, isMobile: false },
   { name: 'Projector 1080p', width: 1920, height: 1080, isMobile: false }
 ];
+const decodeRounds = JSON.parse(await readFile(join(root, 'content', 'decode-rounds.json'), 'utf8')).rounds;
+
+async function showRealDecodeClues(round, page) {
+  await navigate(`http://127.0.0.1:${SERVER_PORT}/${page}?preview=decode-clue3`);
+  const clues = JSON.stringify(round.clues);
+  const imageSources = JSON.stringify(round.clueMedia.map(media => media.src));
+  await evaluate(`() => {
+    const clues = ${clues}, images = ${imageSources};
+    [...document.querySelectorAll('.decode-clue-item')].forEach((card, index) => {
+      card.querySelector('p').textContent = 'Clue ' + (index + 1) + ': ' + clues[index];
+      card.querySelector('img').src = images[index];
+    });
+    return true;
+  }`);
+  const parentSelector = page === 'display' ? '.display-decode-clues' : '.decode-preparing-panel';
+  await evaluate(`async () => {
+    const images = [...document.querySelectorAll('${parentSelector} .decode-clue-item img')];
+    await Promise.all(images.map(image => image.decode().catch(() => null)));
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return images.length === 3 && images.every(image => image.complete && image.naturalWidth > 0);
+  }`);
+}
+
+async function waitForDecodePhotos(parentSelector) {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const ready = await evaluate(`() => {
+      const images = [...document.querySelectorAll('${parentSelector} .decode-clue-item img')];
+      return images.length === 3 && images.every(image => image.complete && image.naturalWidth > 0);
+    }`);
+    if (ready) return;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+}
 
 let allPassed = true;
 const results = [];
@@ -354,6 +388,7 @@ for (const vp of matrix) {
     // 4. Mobile Phone Test: every Decode preparing state shows all three clues and photos
     for (const clueStep of [1, 2, 3]) {
       await navigate(`http://127.0.0.1:${SERVER_PORT}/play?preview=decode-clue${clueStep}`);
+      await waitForDecodePhotos('.decode-preparing-panel');
       const stepMetrics = await evaluate(`() => {
         const panel = document.querySelector('.decode-preparing-panel');
         const cards = [...document.querySelectorAll('.decode-preparing-panel .decode-clue-item')];
@@ -377,6 +412,25 @@ for (const vp of matrix) {
         details: `Clue cards: ${stepMetrics.clueCount}, photos loaded: ${stepMetrics.loadedPhotos}, photo widths: ${stepMetrics.imageWidths.join(', ')}, H-scroll: ${stepMetrics.hasHorizontalScroll}`
       });
       if (!stepOk) allPassed = false;
+    }
+
+    for (const round of decodeRounds) {
+      await showRealDecodeClues(round, 'play');
+      const layout = await evaluate(`() => {
+        const cards = [...document.querySelectorAll('.decode-preparing-panel .decode-clue-item')];
+        return {
+          photosLoaded: cards.filter(card => card.querySelector('img')?.complete && card.querySelector('img').naturalWidth > 0).length,
+          captionsVisible: cards.every(card => {
+            const box = card.getBoundingClientRect(), text = card.querySelector('p').getBoundingClientRect();
+            return text.left >= box.left - 1 && text.right <= box.right + 1 &&
+              text.top >= box.top - 1 && text.bottom <= box.bottom + 1;
+          }),
+          horizontalScroll: document.documentElement.scrollWidth > innerWidth + 2
+        };
+      }`);
+      const pass = layout.photosLoaded === 3 && layout.captionsVisible && !layout.horizontalScroll;
+      results.push({viewport: `${vp.name} (${vp.width}×${vp.height})`, test: `Real Decode ${round.state} (Phone)`, pass, details: `Photos: ${layout.photosLoaded}/3, captions visible: ${layout.captionsVisible}, H-scroll: ${layout.horizontalScroll}`});
+      if (!pass) allPassed = false;
     }
 
     // 5. Mobile Phone Test: Structural Rerender Deduplication
@@ -420,6 +474,7 @@ for (const vp of matrix) {
 
     for (const [label, preview] of projectorStates) {
       await navigate(`http://127.0.0.1:${SERVER_PORT}/display?preview=${preview}`);
+      if (preview.startsWith('decode-clue')) await waitForDecodePhotos('.display-decode-clues');
       if (preview === 'lens') {
         // The first cold Lens load parses the local D3/cloud bundles before the
         // final controller runs; wait for the ownership state, not merely HTML.
@@ -441,6 +496,7 @@ for (const vp of matrix) {
           return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
         };
         const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+        const contained = (inner, outer) => inner && outer && inner.left >= outer.left - 1 && inner.right <= outer.right + 1 && inner.top >= outer.top - 1 && inner.bottom <= outer.bottom + 1;
         const status = document.querySelector('.screen-status');
         const statusRect = status?.getBoundingClientRect();
         const decodeCards = Array.from(document.querySelectorAll('.display-decode-clues .decode-clue-item'));
@@ -450,6 +506,17 @@ for (const vp of matrix) {
         const collisions = statusRect ? protectedContent.filter(el => overlaps(statusRect, el.getBoundingClientRect())).map(el => el.className || el.tagName) : [];
         const edgeHeight = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--edge-height')) || 0;
         const footers = Array.from(document.querySelectorAll('.display-question footer')).filter(visible);
+        const clueLayoutFailures = decodeCards.flatMap((card, index) => {
+          const cardRect = card.getBoundingClientRect();
+          const image = card.querySelector('img');
+          const imageRect = image?.getBoundingClientRect();
+          const captionRect = card.querySelector('p')?.getBoundingClientRect();
+          const footerRect = footers[0]?.getBoundingClientRect();
+          return contained(imageRect, cardRect) && contained(captionRect, cardRect) &&
+            (!footerRect || (!overlaps(cardRect, footerRect) && !overlaps(captionRect, footerRect))) &&
+            cardRect.left >= 0 && cardRect.right <= innerWidth + 1 &&
+            cardRect.top >= edgeHeight && cardRect.bottom <= innerHeight - edgeHeight ? [] : [index + 1];
+        });
         const footerBehindBand = footers.some(el => el.getBoundingClientRect().bottom > innerHeight - edgeHeight + 1);
         const footerBottom = footers.length ? Math.round(footers[0].getBoundingClientRect().bottom) : null;
         const section = document.querySelector('.display-question');
@@ -470,17 +537,18 @@ for (const vp of matrix) {
           sectionBottom,
           decodeCardCount: decodeCards.length,
           decodePhotosLoaded,
+          clueLayoutFailures,
           clippedText
         };
       }`);
       const isDecodePreparingPreview = preview.startsWith('decode-clue');
       const decodePhotosOk = !isDecodePreparingPreview || (composition.decodeCardCount === 3 && composition.decodePhotosLoaded === 3);
-      const compositionOk = !composition.hasHorizontalScroll && !composition.hasVerticalScroll && composition.statusInsideViewport && composition.collisions.length === 0 && !composition.footerBehindBand && composition.clippedText.length === 0 && decodePhotosOk;
+      const compositionOk = !composition.hasHorizontalScroll && !composition.hasVerticalScroll && composition.statusInsideViewport && composition.collisions.length === 0 && !composition.footerBehindBand && composition.clippedText.length === 0 && composition.clueLayoutFailures.length === 0 && decodePhotosOk;
       results.push({
         viewport: `${vp.name} (${vp.width}×${vp.height})`,
         test: `${label} Composition (Projector)`,
         pass: compositionOk,
-        details: `H-scroll: ${composition.hasHorizontalScroll}, V-scroll: ${composition.hasVerticalScroll}, status safe: ${composition.statusInsideViewport}, collisions: ${composition.collisions.length}, clipped text: ${composition.clippedText.length}, footer behind band: ${composition.footerBehindBand} (footer ${composition.footerBottom}px, section ${composition.sectionBottom}px), clue photos: ${composition.decodePhotosLoaded}/${composition.decodeCardCount}`
+        details: `H-scroll: ${composition.hasHorizontalScroll}, V-scroll: ${composition.hasVerticalScroll}, status safe: ${composition.statusInsideViewport}, collisions: ${composition.collisions.length}, clipped text: ${composition.clippedText.length}, clue card overflow: ${composition.clueLayoutFailures.join(',') || 'none'}, footer behind band: ${composition.footerBehindBand} (footer ${composition.footerBottom}px, section ${composition.sectionBottom}px), clue photos: ${composition.decodePhotosLoaded}/${composition.decodeCardCount}`
       });
       if (!compositionOk) allPassed = false;
 
@@ -522,6 +590,37 @@ for (const vp of matrix) {
         });
         if (!lensOk) allPassed = false;
       }
+    }
+
+    for (const round of decodeRounds) {
+      await showRealDecodeClues(round, 'display');
+      if (process.env.NIAC_CAPTURE_SCREENSHOTS === '1' && vp.width === 1920 && round.state === 'Niger') {
+        const dir = join(root, 'artifacts', 'qa');
+        await mkdir(dir, { recursive: true });
+        const screenshot = await cdpSend('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+        await writeFile(join(dir, 'decode-niger-1920x1080.png'), Buffer.from(screenshot.data, 'base64'));
+      }
+      const layout = await evaluate(`() => {
+        const cards = [...document.querySelectorAll('.display-decode-clues .decode-clue-item')];
+        const footer = document.querySelector('.display-question footer')?.getBoundingClientRect();
+        const edge = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--edge-height')) || 0;
+        const within = (inner, outer) => inner && outer && inner.left >= outer.left - 1 && inner.right <= outer.right + 1 && inner.top >= outer.top - 1 && inner.bottom <= outer.bottom + 1;
+        return {
+          photosLoaded: cards.filter(card => card.querySelector('img')?.complete && card.querySelector('img').naturalWidth > 0).length,
+          cardsFit: cards.every(card => {
+            const box = card.getBoundingClientRect();
+            return within(card.querySelector('img')?.getBoundingClientRect(), box) &&
+              within(card.querySelector('p')?.getBoundingClientRect(), box) &&
+              box.left >= 0 && box.right <= innerWidth + 1 &&
+              box.top >= edge && box.bottom <= innerHeight - edge &&
+              (!footer || box.bottom <= footer.top - 1);
+          }),
+          horizontalScroll: document.documentElement.scrollWidth > innerWidth + 2
+        };
+      }`);
+      const pass = layout.photosLoaded === 3 && layout.cardsFit && !layout.horizontalScroll;
+      results.push({viewport: `${vp.name} (${vp.width}×${vp.height})`, test: `Real Decode ${round.state} (Projector)`, pass, details: `Photos: ${layout.photosLoaded}/3, cards and captions fit: ${layout.cardsFit}, H-scroll: ${layout.horizontalScroll}`});
+      if (!pass) allPassed = false;
     }
 
     // Projector Test: Passport Reveal room-scale layout (must fit within 100vh)
