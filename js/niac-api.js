@@ -16,7 +16,7 @@
     }
     return fallback;
   }
-  async function request(path,{method='GET',body,admin=false,idempotencyKey,timeout=8000}={}){
+  async function request(path,{method='GET',body,admin=false,idempotencyKey,timeout=8000,retry=true}={}){
     if(path==='/answers'&&method==='POST'&&gatewayAnswerUrl){
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
       try{
@@ -28,7 +28,7 @@
     }
     const headers={accept:'application/json'};if(body)headers['content-type']='application/json';
     const auth=admin?sessionStorage.getItem(ADMIN_KEY):getToken();if(auth)headers.authorization=`Bearer ${auth}`;if(idempotencyKey)headers['idempotency-key']=idempotencyKey;
-    const attempts=method==='GET'?2:1;let lastError;
+    const attempts=method==='GET'&&retry?2:1;let lastError;
     for(let attempt=0;attempt<attempts;attempt++){
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),timeout);
       try{

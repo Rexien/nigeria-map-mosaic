@@ -298,32 +298,34 @@ export async function runTier(options = {}) {
     }
   }
 
-  // Players receive scoreReady together; keep the read burst close to that event.
-  console.log('\n[Tier Step 5/6] Simulating post-reveal score reads over 2s...');
+  // Mirror the phone's bounded jitter after scoreReady, not a synchronized read storm.
+  console.log('\n[Tier Step 5/6] Simulating post-reveal score reads over 12s...');
   const readT0 = performance.now();
   const readPromises = participants.map(async p => {
-    const jitterMs = Math.floor(Math.random() * 2000);
+    const jitterMs = Math.floor(Math.random() * 12000);
     await new Promise(r => setTimeout(r, jitterMs));
     const participantStartedAt = performance.now();
     const outcomes = [];
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const res = await fetch(`${baseUrl}/api/me`, {
           headers: { ...headers, 'Authorization': `Bearer ${p.token}` },
           keepalive: true,
-          signal: AbortSignal.timeout(10000)
+          signal: AbortSignal.timeout(7000)
         });
         await res.arrayBuffer();
         outcomes.push('HTTP_' + res.status);
         if (res.status === 200) {
-          return { ok: true, durationMs: performance.now() - participantStartedAt, attempts: attempt + 1, outcomes };
+          return { ok: true, durationMs: performance.now() - participantStartedAt,
+            visibleAfterReadyMs: performance.now() - readT0, attempts: attempt + 1, outcomes };
         }
       } catch (err) {
         outcomes.push(err?.cause?.code || err?.name || 'NETWORK_ERROR');
       }
-      if (attempt < 2) await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
+      if (attempt < 1) await new Promise(r => setTimeout(r, 4000 + Math.random() * 4000));
     }
-    return { ok: false, durationMs: performance.now() - participantStartedAt, attempts: 3, outcomes };
+    return { ok: false, durationMs: performance.now() - participantStartedAt,
+      visibleAfterReadyMs: performance.now() - readT0, attempts: 2, outcomes };
   });
   const readResults = await Promise.all(readPromises);
   const readDuration = performance.now() - readT0;
@@ -335,7 +337,9 @@ export async function runTier(options = {}) {
     for (const outcome of result.outcomes) readAttemptOutcomes[outcome] = (readAttemptOutcomes[outcome] || 0) + 1;
   }
   const readLatencies=computeLatencyPercentiles(readResults.filter(r=>r.ok).map(r=>r.durationMs));
+  const readVisibleLatencies=computeLatencyPercentiles(readResults.filter(r=>r.ok).map(r=>r.visibleAfterReadyMs));
   console.log(`  Score Lookups: ${readPassCount}/${participants.length}; wall time ${readDuration.toFixed(2)}ms; successful-request p95 ${readLatencies.p95}ms (failures counted separately)`);
+  console.log('  Score visible after readiness p95: ' + readVisibleLatencies.p95 + 'ms');
   console.log('  First-attempt success: ' + readFirstPassCount + '/' + participants.length +
     '; retries needed: ' + readRetryCount + '; outcomes: ' + JSON.stringify(readAttemptOutcomes));
 
@@ -357,7 +361,7 @@ export async function runTier(options = {}) {
   const scoreReadyWithinSla = roundReports.every(r =>
     r.scoreReady && r.scoreReadyAfterDeadlineMs <= 15000);
   const readsWithinSla = readPassCount >= Math.ceil(participants.length * 0.95) &&
-    readLatencies.p95 <= 5000;
+    readLatencies.p95 <= 5000 && readVisibleLatencies.p95 <= 18000;
 
   const passed = zeroLoss && p95WithinSla && fanoutWithinSla &&
     revealWithinSla && scoreReadyWithinSla && readsWithinSla &&
@@ -382,6 +386,7 @@ export async function runTier(options = {}) {
     readRetryCount,
     readAttemptOutcomes,
     readLatencies,
+    readVisibleLatencies,
     certification:'Partial answer-path test only; full scoring, recovery and resource gates remain required',
     telemetrySummary,
     roundReports,

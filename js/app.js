@@ -90,7 +90,8 @@
     const revealed=['reveal','wrong'].includes(mode);
     return{data:{activity:'passport',screenMode:'activity',state:revealed?'revealed':'open',question:basePassport,deadlineAt:new Date(now+30000).toISOString(),responseCount:0,serverNow:new Date().toISOString()},answerIndex:mode==='wrong'?2:null};
   }
-  let lastPlayKey = '', lastDeadline = '', lastScoreFetchKey = '';
+  let lastPlayKey = '', lastDeadline = '', lastKnownScoreText = '', lastKnownRevealText = '';
+  let scoredQuestionId = '', scoreRefreshQuestionId = '', scoreRefreshTimer = null;
   function playMediaHTML(q){
     const m=q.media||(q.imageUrl?{src:q.imageUrl,alt:q.altText,timing:'question'}:null);
     if(!m||!m.src)return '';
@@ -117,6 +118,11 @@
   }
   function renderPlay(s){
     const root=$('#play-root');if(!root)return;
+    if(scoreRefreshQuestionId && s.question?.id !== scoreRefreshQuestionId){
+      clearTimeout(scoreRefreshTimer);
+      scoreRefreshTimer=null;
+      scoreRefreshQuestionId='';
+    }
     const prior=s.question&&JSON.parse(localStorage.getItem(`niac-answer-${s.question.id}`)||'null');
     const isDecodePrep=s.activity==='decode'&&s.state==='preparing'&&Boolean(s.question);
     const visible=s.question&&(['open','locked','revealed','leaderboard'].includes(s.state)||isDecodePrep);
@@ -164,7 +170,7 @@
 
     if(isDecodePrep){
       root.innerHTML=`<div class="panel play-panel decode-preparing-panel is-decode-play"><div class="question-meta"><span>Decode the State · All 3 clues</span>${isSpectator?'<span class="spectator-badge">Spectator view</span>':''}</div><h1>${escape(q.question)}</h1>${decodeClueCardsHTML(q)}<div class="notice decode-notice" role="status"><strong>Get ready</strong><span>All three clues are ready. Map and answer choices open when the host starts voting.</span></div><p id="personal-live-score" class="muted"></p></div>`;
-      updateLiveScore('decode');
+      $('#personal-live-score',root).textContent=isSpectator?'Spectator mode · Interactive practice only':lastKnownScoreText||'Your event score updates after the round.';
       return;
     }
 
@@ -220,46 +226,55 @@
 
     $$('.answer',root).forEach(b=>b.addEventListener('click',()=>submitAnswer(Number(b.dataset.option),s),{once:true}));
     startClock(s, isSpectator);
-    if(s.state==='revealed'&&!s.scoreReady){
-      const score=$('#personal-live-score',root);
-      if(score)score.textContent=isSpectator?'Spectator mode · Interactive practice only':'Scores are updating…';
-    }else updateLiveScore(q.activity, revealed);
+    const score=$('#personal-live-score',root);
+    if(isSpectator){
+      score.textContent='Spectator mode · Interactive practice only';
+    }else if(s.state==='revealed'&&!s.scoreReady){
+      score.textContent='Scores are updating…';
+    }else if(revealed){
+      score.textContent=scoredQuestionId===q.id?lastKnownRevealText:'Checking your score…';
+      if(scoredQuestionId!==q.id && scoreRefreshQuestionId!==q.id){
+        scoreRefreshQuestionId=q.id;
+        const expectedSnapshotVersion=s.state==='revealed'?Number(s.version):0;
+        // Spread personal reads after score readiness; a synchronized burst stalls Supabase.
+        scoreRefreshTimer=setTimeout(()=>updateLiveScore(q.id,expectedSnapshotVersion),Math.random()*12000);
+      }
+    }else{
+      score.textContent=lastKnownScoreText||'Your event score updates after the round.';
+    }
     if(prior&&!prior.confirmed&&s.state==='open')retryPending(prior,s);
   }
-  async function updateLiveScore(activity, force = false, attempt = 0, expectedVersion = currentState?.version){
-    if(currentState?.version !== expectedVersion)return;
-    const scoreKey = `${activity}|${currentState?.state}|${currentState?.question?.id}`;
-    if(!force && lastScoreFetchKey === scoreKey && currentState?.state !== 'revealed') return;
+  async function updateLiveScore(questionId, expectedSnapshotVersion, attempt=0){
+    if(currentState?.question?.id!==questionId)return;
+    scoreRefreshTimer=null;
     try{
-      const d=await api().request('/me'),el=$('#personal-live-score');
-      if(currentState?.version !== expectedVersion)return;
-      if(currentState?.state === 'revealed' && currentState.scoreReady && Number(d.snapshotVersion) < Number(expectedVersion)){
+      const d=await api().request('/me',{timeout:7000,retry:false}),el=$('#personal-live-score');
+      if(currentState?.question?.id!==questionId)return;
+      if(expectedSnapshotVersion && Number(d.snapshotVersion) < expectedSnapshotVersion){
         throw new Error('Score snapshot is still catching up');
       }
-      lastScoreFetchKey = scoreKey;
+      scoreRefreshQuestionId='';
+      scoredQuestionId=questionId;
+      const total=Number(d.scores?.total??((d.scores?.combined||0)+(d.scores?.decode||0)));
+      lastKnownScoreText=`Event total: ${total.toLocaleString()} points · Current rank: #${d.rank}`;
+      const q=currentState.question;
+      const prior=JSON.parse(localStorage.getItem(`niac-answer-${q.id}`)||'{}');
+      const isCorrect=prior?.confirmed&&q.correctOption===prior.optionIndex;
+      const qPoints=isCorrect?(q.points||1000):0;
+      lastKnownRevealText=`Points earned on this question: +${qPoints.toLocaleString()} · ${lastKnownScoreText}`;
       if(el){
-      const result=el.parentElement?.querySelector('.result-notice');
-      if(result)result.after(el);
-        const total = Number(d.scores?.total ?? ((d.scores?.combined || 0) + (d.scores?.decode || 0)));
-        if(d.isSpectator){
-          el.textContent='Spectator mode · Interactive practice only';
-        } else if(currentState?.state === 'revealed' && currentState?.question){
-          const q = currentState.question;
-          const prior = JSON.parse(localStorage.getItem(`niac-answer-${q.id}`) || '{}');
-          const isCorrect = Number.isInteger(prior?.optionIndex) && q.correctOption === prior.optionIndex;
-          const qPoints = isCorrect ? (q.points || 1000) : 0;
-          el.textContent=`Points earned on this question: +${qPoints.toLocaleString()} · Event total: ${total.toLocaleString()} points · Current rank: #${d.rank}`;
-        } else {
-          el.textContent=`Event total: ${total.toLocaleString()} points · Current rank: #${d.rank}`;
-        }
+        const result=el.parentElement?.querySelector('.result-notice');
+        if(result)result.after(el);
+        el.textContent=lastKnownRevealText;
       }
     }catch{
-      if(currentState?.version !== expectedVersion || currentState?.state !== 'revealed' || !currentState.scoreReady)return;
-      if(attempt < 3){
-        setTimeout(()=>updateLiveScore(activity,true,attempt+1,expectedVersion),1200*(attempt+1));
+      if(currentState?.question?.id!==questionId)return;
+      if(attempt < 1){
+        scoreRefreshTimer=setTimeout(()=>updateLiveScore(questionId,expectedSnapshotVersion,attempt+1),4000+Math.random()*4000);
       }else{
+        scoreRefreshQuestionId='';
         const el=$('#personal-live-score');
-        if(el)el.textContent='Your score could not load. Refresh this page to try again.';
+        if(el)el.textContent='Your score is delayed. Open Passport later to refresh it.';
       }
     }
   }
