@@ -118,11 +118,6 @@
   }
   function renderPlay(s){
     const root=$('#play-root');if(!root)return;
-    if(scoreRefreshQuestionId && s.question?.id !== scoreRefreshQuestionId){
-      clearTimeout(scoreRefreshTimer);
-      scoreRefreshTimer=null;
-      scoreRefreshQuestionId='';
-    }
     const prior=s.question&&JSON.parse(localStorage.getItem(`niac-answer-${s.question.id}`)||'null');
     const isDecodePrep=s.activity==='decode'&&s.state==='preparing'&&Boolean(s.question);
     const visible=s.question&&(['open','locked','revealed','leaderboard'].includes(s.state)||isDecodePrep);
@@ -234,6 +229,7 @@
     }else if(revealed){
       score.textContent=scoredQuestionId===q.id?lastKnownRevealText:'Checking your score…';
       if(scoredQuestionId!==q.id && scoreRefreshQuestionId!==q.id){
+        clearTimeout(scoreRefreshTimer);
         scoreRefreshQuestionId=q.id;
         const expectedSnapshotVersion=s.state==='revealed'?Number(s.version):0;
         // Spread personal reads after score readiness; a synchronized burst stalls Supabase.
@@ -245,11 +241,11 @@
     if(prior&&!prior.confirmed&&s.state==='open')retryPending(prior,s);
   }
   async function updateLiveScore(questionId, expectedSnapshotVersion, attempt=0){
-    if(currentState?.question?.id!==questionId)return;
+    if(scoreRefreshQuestionId!==questionId)return;
     scoreRefreshTimer=null;
     try{
       const d=await api().request('/me',{timeout:7000,retry:false}),el=$('#personal-live-score');
-      if(currentState?.question?.id!==questionId)return;
+      if(scoreRefreshQuestionId!==questionId)return;
       if(expectedSnapshotVersion && Number(d.snapshotVersion) < expectedSnapshotVersion){
         throw new Error('Score snapshot is still catching up');
       }
@@ -257,24 +253,27 @@
       scoredQuestionId=questionId;
       const total=Number(d.scores?.total??((d.scores?.combined||0)+(d.scores?.decode||0)));
       lastKnownScoreText=`Event total: ${total.toLocaleString()} points · Current rank: #${d.rank}`;
-      const q=currentState.question;
-      const prior=JSON.parse(localStorage.getItem(`niac-answer-${q.id}`)||'{}');
-      const isCorrect=prior?.confirmed&&q.correctOption===prior.optionIndex;
-      const qPoints=isCorrect?(q.points||1000):0;
-      lastKnownRevealText=`Points earned on this question: +${qPoints.toLocaleString()} · ${lastKnownScoreText}`;
+      const sameQuestion=currentState?.question?.id===questionId;
+      if(sameQuestion){
+        const q=currentState.question;
+        const prior=JSON.parse(localStorage.getItem(`niac-answer-${q.id}`)||'{}');
+        const isCorrect=prior?.confirmed&&q.correctOption===prior.optionIndex;
+        const qPoints=isCorrect?(q.points||1000):0;
+        lastKnownRevealText=`Points earned on this question: +${qPoints.toLocaleString()} · ${lastKnownScoreText}`;
+      }
       if(el){
         const result=el.parentElement?.querySelector('.result-notice');
-        if(result)result.after(el);
-        el.textContent=lastKnownRevealText;
+        if(sameQuestion&&result)result.after(el);
+        if(sameQuestion||['open','preparing','locked'].includes(currentState?.state))el.textContent=sameQuestion?lastKnownRevealText:lastKnownScoreText;
       }
     }catch{
-      if(currentState?.question?.id!==questionId)return;
+      if(scoreRefreshQuestionId!==questionId)return;
       if(attempt < 1){
         scoreRefreshTimer=setTimeout(()=>updateLiveScore(questionId,expectedSnapshotVersion,attempt+1),4000+Math.random()*4000);
       }else{
         scoreRefreshQuestionId='';
         const el=$('#personal-live-score');
-        if(el)el.textContent='Your score is delayed. Open Passport later to refresh it.';
+        if(el&&currentState?.question?.id===questionId)el.textContent='Your score is delayed. Open Passport later to refresh it.';
       }
     }
   }
