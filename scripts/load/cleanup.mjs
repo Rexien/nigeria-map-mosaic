@@ -10,7 +10,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export async function cleanupRehearsal(options = {}) {
   const env = options.env || process.env;
-  const baseUrl = (options.baseUrl || env.NIAC_BASE_URL || 'https://niaclive-git-feature-admin-pin-auth-zamijudes-projects.vercel.app').replace(/\/$/, '');
+  const targetUrl = options.baseUrl || env.NIAC_BASE_URL;
+  if(!targetUrl)throw new Error('NIAC_BASE_URL is required so rehearsal cleanup cannot target an obsolete Preview site by default');
+  const baseUrl = targetUrl.replace(/\/$/, '');
   const adminPin = options.adminPin || env.ADMIN_PIN;
   if(!adminPin)throw new Error('ADMIN_PIN is required');
   const dryRun = Boolean(options.dryRun);
