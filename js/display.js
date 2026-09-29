@@ -21,12 +21,7 @@
   let currentProjection = null;
   let ambientIntervalId = null;
   let regionalPoints = null;
-  let rotationTimer = null;
   let queuedRepack = false;
-  let layoutCycle = 0;
-  let visibleBudget = 0;
-  const lastShownCycle = new Map();
-  const failedPlacements = new Map();
 
   // DOM Elements
   const stageEl = document.getElementById('mosaic-stage');
@@ -39,10 +34,6 @@
   const loadingOverlay = document.getElementById('loading-overlay');
   const submitUrlBadge = document.getElementById('submit-url-badge');
   const questionTitleEl = document.getElementById('display-question');
-  const coverageEl = document.createElement('span');
-  coverageEl.id = 'mosaic-coverage';
-  coverageEl.className = 'mosaic-coverage';
-  questionTitleEl?.after(coverageEl);
   const isEmbedded = new URLSearchParams(window.location.search).get('embed') === '1';
 
   /**
@@ -307,7 +298,6 @@
       queuedRepack = true;
       return;
     }
-    clearTimeout(rotationTimer);
     isRepacking = true;
 
     if (repackIndicator) repackIndicator.classList.add('visible');
@@ -319,82 +309,44 @@
     if (wordGroups.length === 0) {
       wordsGroupEl.innerHTML = '';
       renderedWordMap.clear();
-      lastShownCycle.clear();
-      failedPlacements.clear();
-      if (coverageEl) coverageEl.textContent = '';
       isRepacking = false;
       if (repackIndicator) repackIndicator.classList.remove('visible');
       return;
     }
 
-    // A projector has finite readable area. Keep every approved response in
-    // memory and rotate distinct labels fairly when they cannot fit at once.
-    const stems = new Set(wordGroups.map(group => group.stem));
-    for (const stem of lastShownCycle.keys()) if (!stems.has(stem)) lastShownCycle.delete(stem);
-    for (const stem of failedPlacements.keys()) if (!stems.has(stem)) failedPlacements.delete(stem);
-    const stageBudget = Math.max(70, Math.min(240, Math.floor(currentWidth * currentHeight / 9000)));
-    if (!visibleBudget) visibleBudget = stageBudget;
-    visibleBudget = Math.min(visibleBudget, stageBudget);
-    const pageSize = Math.min(wordGroups.length, visibleBudget);
-    const longGroups = wordGroups.filter(group => group.text.length > 18);
-    const shortGroups = wordGroups.filter(group => group.text.length <= 18);
-    const dedicatedPhrasePage = wordGroups.length > pageSize && longGroups.length > 0 &&
-      (shortGroups.length === 0 || layoutCycle % 2 === 1);
-    const pinnedCount = !dedicatedPhrasePage && wordGroups.length > pageSize ? Math.min(10, Math.floor(pageSize / 10)) : 0;
-    const pinned = shortGroups.slice(0, pinnedCount);
-    const rotating = (dedicatedPhrasePage ? longGroups : wordGroups.length > pageSize ? shortGroups : wordGroups)
-      .filter(group => !pinned.includes(group)).sort((a, b) => {
-      const aPriority = (lastShownCycle.get(a.stem) || 0) + (failedPlacements.get(a.stem) || 0) * 2;
-      const bPriority = (lastShownCycle.get(b.stem) || 0) + (failedPlacements.get(b.stem) || 0) * 2;
-      return aPriority - bPriority || b.latestAt - a.latestAt;
-    });
-    const selectedGroups = pinned.concat(rotating.slice(0, dedicatedPhrasePage ? 18 : pageSize - pinnedCount));
-
-    // Size for the labels on this composition, not for the entire archive.
-    const totalGroups = selectedGroups.length;
+    // Scale font sizes based on total unique words (max capped at 160)
+    const totalGroups = wordGroups.length;
     let minFontSize, maxFontSize, cloudPadding;
 
-    if (dedicatedPhrasePage) {
-      minFontSize = 14;
-      maxFontSize = 24;
-      cloudPadding = 2;
-    } else if (totalGroups <= 6) {
+    if (totalGroups <= 6) {
       minFontSize = 32;
       maxFontSize = 82;
       cloudPadding = 4;
     } else if (totalGroups <= 15) {
       minFontSize = 28;
-      maxFontSize = 95;
+      maxFontSize = 80;
       cloudPadding = 3.5;
     } else if (totalGroups <= 40) {
       minFontSize = 20;
-      maxFontSize = 75;
+      maxFontSize = 70;
       cloudPadding = 3;
-    } else if (totalGroups <= 100) {
+    } else if (totalGroups <= 80) {
       minFontSize = 16;
-      maxFontSize = 58;
+      maxFontSize = 56;
       cloudPadding = 2.5;
-    } else if (totalGroups <= 250) {
-      minFontSize = 12;
-      maxFontSize = 44;
+    } else if (totalGroups <= 120) {
+      minFontSize = 14;
+      maxFontSize = 50;
       cloudPadding = 2;
-    } else if (totalGroups <= 500) {
-      minFontSize = 9.5;
-      maxFontSize = 32;
-      cloudPadding = 1.2;
-    } else if (totalGroups <= 800) {
-      minFontSize = 8;
-      maxFontSize = 25;
-      cloudPadding = 1;
     } else {
-      // Extreme density / worst-case (>800 unique words)
-      minFontSize = 7;
-      maxFontSize = 20;
-      cloudPadding = 0.5;
+      // 120 - 160 words
+      minFontSize = 13.5;
+      maxFontSize = 46;
+      cloudPadding = 2;
     }
 
-    const maxCount = Math.max(...selectedGroups.map(d => d.count), 1);
-    const minCount = Math.min(...selectedGroups.map(d => d.count), 1);
+    const maxCount = Math.max(...wordGroups.map(d => d.count), 1);
+    const minCount = Math.min(...wordGroups.map(d => d.count), 1);
 
     // High contrast projector palette
     const palette = config.COLOR_PALETTE || ['#FBBF24', '#FFFFFF', '#10B981', '#F59E0B'];
@@ -409,7 +361,7 @@
       regionalPoints.all
     ].filter(arr => arr && arr.length > 0);
 
-    const wordsData = selectedGroups.map((d, index) => {
+    const wordsData = wordGroups.map((d, index) => {
       // Font size scaled by square root of count
       const sqrtCount = Math.sqrt(d.count);
       const sqrtMax = Math.sqrt(maxCount);
@@ -489,26 +441,6 @@
       .initialBoard(maskCopy) // Constrain strictly inside Nigeria
       .random(() => Math.random())
       .on('end', (placedWords) => {
-        layoutCycle++;
-        const placedStems = new Set(placedWords.map(word => word.stem));
-        for (const group of selectedGroups) {
-          if (placedStems.has(group.stem)) {
-            lastShownCycle.set(group.stem, layoutCycle);
-            failedPlacements.delete(group.stem);
-          } else {
-            failedPlacements.set(group.stem, (failedPlacements.get(group.stem) || 0) + 1);
-          }
-        }
-        // If the mask rejected many labels, use fewer per composition rather
-        // than shrinking everything to unreadable text or silently losing them.
-        if (!dedicatedPhrasePage && placedWords.length < selectedGroups.length * 0.85 && visibleBudget > 50) {
-          visibleBudget = Math.max(50, Math.floor(visibleBudget * 0.85));
-        }
-        if (coverageEl) {
-          coverageEl.textContent = wordGroups.length > placedWords.length
-            ? `Showing ${placedWords.length} of ${wordGroups.length} unique lenses · all cycle through the map`
-            : '';
-        }
         renderPlacedWords(placedWords, isInstant);
         lastRepackCount = allResponses.filter(r => !r.is_hidden).length;
         isRepacking = false;
@@ -518,8 +450,6 @@
         if (queuedRepack) {
           queuedRepack = false;
           setTimeout(() => triggerRepack(true), 0);
-        } else if (wordGroups.length > placedWords.length) {
-          rotationTimer = setTimeout(() => triggerRepack(false), wordGroups.length > 250 ? 6000 : 9000);
         }
       });
 

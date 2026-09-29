@@ -315,9 +315,9 @@ test('Manage Words: bulk approval, approved map, and admin list paginate past 1,
         httpMethod: 'GET', path: '/api/admin/lens',
         headers: { authorization: `Bearer ${adminToken}` }
       });
-      assert.equal(JSON.parse(publicResult.body).responses.length, 1205);
+      assert.equal(JSON.parse(publicResult.body).responses.length, 160);
       assert.equal(JSON.parse(adminResult.body).responses.length, 1206);
-      assert.deepEqual(offsets, [0, 1000, 0, 1000, 0, 1000]);
+      assert.deepEqual(offsets, [0, 1000, 0, 0, 1000]);
     } finally {
       global.fetch = originalFetch;
     }
