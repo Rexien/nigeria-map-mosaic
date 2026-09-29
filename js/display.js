@@ -155,9 +155,9 @@
   function buildProjectionAndMask() {
     if (!geojsonData) return;
 
-    // Generous safe padding (10% horizontally, 12% vertically) for projector safety
-    const padX = Math.round(currentWidth * 0.08);
-    const padY = Math.round(currentHeight * 0.10);
+    // Maximize map area on projector stage: safe minimal padding (2% horizontally, 2% vertically)
+    const padX = Math.round(currentWidth * 0.02);
+    const padY = Math.round(currentHeight * 0.02);
 
     // 1. Create projection fitted directly to SVG stage dimensions
     currentProjection = d3.geoMercator()
@@ -308,27 +308,43 @@
       return;
     }
 
-    // Dynamic font sizing scale based on number of distinct word groups
+    // Continuous adaptive font sizing & dynamic collision padding based on distinct word count
     const totalGroups = wordGroups.length;
-    let minFontSize = config.FONT_SIZE_MIN || 18;
-    let maxFontSize = config.FONT_SIZE_MAX || 100;
+    let minFontSize, maxFontSize, cloudPadding;
 
-    // Scale sizing so few words fill early, many words fit late
     if (totalGroups <= 6) {
-      minFontSize = 30;
-      maxFontSize = 76;
+      minFontSize = 32;
+      maxFontSize = 82;
+      cloudPadding = 4;
     } else if (totalGroups <= 15) {
       minFontSize = 28;
       maxFontSize = 95;
+      cloudPadding = 3.5;
     } else if (totalGroups <= 40) {
       minFontSize = 20;
       maxFontSize = 75;
+      cloudPadding = 3;
     } else if (totalGroups <= 100) {
       minFontSize = 16;
       maxFontSize = 58;
+      cloudPadding = 2.5;
+    } else if (totalGroups <= 250) {
+      minFontSize = 12;
+      maxFontSize = 44;
+      cloudPadding = 2;
+    } else if (totalGroups <= 500) {
+      minFontSize = 9.5;
+      maxFontSize = 32;
+      cloudPadding = 1.2;
+    } else if (totalGroups <= 800) {
+      minFontSize = 8;
+      maxFontSize = 25;
+      cloudPadding = 1;
     } else {
-      minFontSize = 13;
-      maxFontSize = 46;
+      // Extreme density / worst-case (>800 unique words)
+      minFontSize = 7;
+      maxFontSize = 20;
+      cloudPadding = 0.5;
     }
 
     const maxCount = Math.max(...wordGroups.map(d => d.count), 1);
@@ -413,7 +429,7 @@
     const layout = d3.layout.cloud()
       .size([currentWidth, currentHeight])
       .words(wordsData)
-      .padding(3)
+      .padding(cloudPadding)
       .rotate(0) // Strictly horizontal for maximum readability on projector
       .font(config.FONT_FAMILY || 'Outfit, sans-serif')
       .fontWeight(config.FONT_WEIGHT || '800')

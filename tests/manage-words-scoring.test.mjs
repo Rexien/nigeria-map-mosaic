@@ -216,6 +216,57 @@ test('Manage Words lifecycle: pending -> approved -> hidden -> restored with ser
   });
 });
 
+test('Manage Words: bulk approve pending submissions with moderate_all_pending', async () => {
+  await withAdminEnv(async () => {
+    const adminToken = createAdminSession();
+    const originalFetch = global.fetch;
+    const dbSubmissions = [
+      { id: 'lens-1', phrase: 'Resilience', status: 'pending', created_at: new Date().toISOString() },
+      { id: 'lens-2', phrase: 'Warmth', status: 'pending', created_at: new Date().toISOString() },
+      { id: 'lens-3', phrase: 'Already Approved', status: 'approved', created_at: new Date().toISOString() }
+    ];
+
+    global.fetch = async (url, options = {}) => {
+      const urlStr = String(url);
+      if (urlStr.includes('/events')) return new Response(JSON.stringify([{ id: 'test-event-id' }]), { status: 200 });
+      if (urlStr.includes('/admin_audit_logs')) return new Response(JSON.stringify([{ id: 'audit-1' }]), { status: 200 });
+      if (urlStr.includes('/lens_submissions?event_id=eq.') && urlStr.includes('status=eq.approved')) {
+        return new Response(JSON.stringify(dbSubmissions.filter(s => s.status === 'approved')), { status: 200 });
+      }
+      if (urlStr.includes('/lens_submissions?event_id=eq.') && urlStr.includes('status=eq.pending') && options.method === 'PATCH') {
+        const patch = JSON.parse(options.body);
+        const updated = [];
+        for (const item of dbSubmissions) {
+          if (item.status === 'pending') {
+            Object.assign(item, patch);
+            updated.push(item);
+          }
+        }
+        return new Response(JSON.stringify(updated), { status: 200 });
+      }
+      return new Response(JSON.stringify([]), { status: 200 });
+    };
+
+    try {
+      const res = await authorityHandler({
+        httpMethod: 'POST',
+        path: '/api/admin/action',
+        headers: { authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ kind: 'moderate_all_pending' })
+      });
+      assert.equal(res.statusCode, 200);
+      const body = JSON.parse(res.body);
+      assert.equal(body.approved, 2, 'Should have approved both pending submissions');
+
+      const pub = await authorityHandler({ httpMethod: 'GET', path: '/api/lens/approved' });
+      const pubBody = JSON.parse(pub.body);
+      assert.equal(pubBody.responses.length, 3, 'All 3 submissions should now be approved on public map');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
+
 test('Decode scoring and cumulative event total: adds Passport and Decode points together', () => {
   const participants = [
     { id: 'p1', alias: 'Kelechi', registeredAt: '2026-09-01T08:00:00Z', isSpectator: false },

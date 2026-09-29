@@ -718,7 +718,7 @@ async function lens(e) {
 async function approvedLens() {
   const ev = await event();
   const responses = await publicReads.get('lens', 1000, async () => {
-    const rows = await db(`lens_submissions?event_id=eq.${ev.id}&status=eq.approved&select=id,phrase,normalized_phrase,created_at&order=created_at.desc&limit=120`);
+    const rows = await db(`lens_submissions?event_id=eq.${ev.id}&status=eq.approved&select=id,phrase,normalized_phrase,created_at&order=created_at.desc&limit=1500`);
     return (rows || []).map(r => ({ id: r.id, phrase: r.phrase, normalized_phrase: r.normalized_phrase, created_at: r.created_at }));
   });
   return json(200, {
@@ -729,7 +729,7 @@ async function approvedLens() {
 
 async function adminLens(e, admin) {
   const ev = await event();
-  const rows = await db(`lens_submissions?event_id=eq.${ev.id}&select=id,phrase,created_at,status,participants(alias)&order=created_at.desc&limit=200`);
+  const rows = await db(`lens_submissions?event_id=eq.${ev.id}&select=id,phrase,created_at,status,participants(alias)&order=created_at.desc&limit=1500`);
   return json(200, { responses: rows || [] });
 }
 
@@ -949,6 +949,19 @@ async function adminAction(e, admin) {
     publicReads.clear();
     await audit(admin, ev, 'moderate_lens', 'lens_submission', id, existing, after);
     return json(200, { response: after });
+  }
+
+  if (b.kind === 'moderate_all_pending') {
+    const updated = await db(`lens_submissions?event_id=eq.${ev.id}&status=eq.pending`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        status: 'approved',
+        reviewed_at: new Date().toISOString()
+      })
+    });
+    publicReads.clear();
+    await audit(admin, ev, 'moderate_all_lens', 'lens_submissions', 'all_pending', null, { count: (updated || []).length });
+    return json(200, { approved: (updated || []).length });
   }
 
   if (b.kind === 'clear_data') {
