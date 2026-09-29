@@ -843,7 +843,9 @@ if (process.env.NIAC_TEST_MOSAIC_DENSITY === '1') {
   // Exercise the actual D3/cloud projector, not a design mockup or DOM stub.
   const mosaicWidth = Number(process.env.NIAC_MOSAIC_WIDTH || 1920);
   const mosaicHeight = Number(process.env.NIAC_MOSAIC_HEIGHT || 1080);
-  mosaicFixtureResponses = Array.from({ length: 500 }, (_, i) => ({
+  const mosaicCount = Number(process.env.NIAC_MOSAIC_COUNT || 500);
+  const mosaicTestSeconds = Number(process.env.NIAC_MOSAIC_TEST_SECONDS || 150);
+  mosaicFixtureResponses = Array.from({ length: mosaicCount }, (_, i) => ({
     id: `mosaic-${i}`,
     phrase: i % 5 === 0
       ? `Shared Nigerian Dream ${String(i + 1).padStart(3, '0')}`
@@ -856,7 +858,7 @@ if (process.env.NIAC_TEST_MOSAIC_DENSITY === '1') {
   const seen = new Set();
   let firstCount = 0;
   let finalStatus = null;
-  for (let i = 0; i < 150; i++) {
+  for (let i = 0; i < mosaicTestSeconds; i++) {
     const status = await evaluate(`() => ({
       total: Number(document.querySelector('#stat-total-count')?.textContent),
       unique: Number(document.querySelector('#stat-unique-count')?.textContent),
@@ -867,23 +869,23 @@ if (process.env.NIAC_TEST_MOSAIC_DENSITY === '1') {
     finalStatus = status;
     if (status?.stems?.length && !firstCount) firstCount = status.stems.length;
     for (const stem of status?.stems || []) seen.add(stem);
-    if (status?.unique === 500 && seen.size === 500) break;
+    if (status?.unique === mosaicCount && seen.size === mosaicCount) break;
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
-  const pass = finalStatus?.total === 500 && finalStatus?.unique === 500 &&
-    seen.size === 500 && !finalStatus?.horizontalScroll;
+  const pass = finalStatus?.total === mosaicCount && finalStatus?.unique === mosaicCount &&
+    seen.size === mosaicCount && !finalStatus?.horizontalScroll;
   results.push({
     viewport: `Projector (${mosaicWidth}×${mosaicHeight})`,
-    test: '500 unique approved words rotate through real mosaic',
+    test: `${mosaicCount} unique approved words rotate through real mosaic`,
     pass,
-    details: `Received: ${finalStatus?.total}, unique: ${finalStatus?.unique}, first composition: ${firstCount}, seen across rotations: ${seen.size}/500, H-scroll: ${finalStatus?.horizontalScroll}, label: ${finalStatus?.coverage}`
+    details: `Received: ${finalStatus?.total}, unique: ${finalStatus?.unique}, first composition: ${firstCount}, seen across rotations: ${seen.size}/${mosaicCount}, H-scroll: ${finalStatus?.horizontalScroll}, label: ${finalStatus?.coverage}`
   });
   if (!pass) allPassed = false;
   if (process.env.NIAC_CAPTURE_SCREENSHOTS === '1') {
     const dir = join(root, 'artifacts', 'qa');
     await mkdir(dir, { recursive: true });
     const screenshot = await cdpSend('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-    await writeFile(join(dir, `mosaic-500-${mosaicWidth}x${mosaicHeight}.png`), Buffer.from(screenshot.data, 'base64'));
+    await writeFile(join(dir, `mosaic-${mosaicCount}-${mosaicWidth}x${mosaicHeight}.png`), Buffer.from(screenshot.data, 'base64'));
   }
 }
 

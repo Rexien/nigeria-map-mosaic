@@ -223,7 +223,8 @@ test('Manage Words: bulk approve pending submissions with moderate_all_pending',
     const dbSubmissions = [
       { id: 'lens-1', phrase: 'Resilience', status: 'pending', created_at: new Date().toISOString() },
       { id: 'lens-2', phrase: 'Warmth', status: 'pending', created_at: new Date().toISOString() },
-      { id: 'lens-3', phrase: 'Already Approved', status: 'approved', created_at: new Date().toISOString() }
+      { id: 'lens-3', phrase: 'Already Approved', status: 'approved', created_at: new Date().toISOString() },
+      { id: 'lens-4', phrase: 'Hidden Before Bulk Approval', status: 'hidden', created_at: new Date().toISOString() }
     ];
 
     global.fetch = async (url, options = {}) => {
@@ -260,6 +261,7 @@ test('Manage Words: bulk approve pending submissions with moderate_all_pending',
       assert.equal(res.statusCode, 200);
       const body = JSON.parse(res.body);
       assert.equal(body.approved, 2, 'Should have approved both pending submissions');
+      assert.equal(dbSubmissions.find(s => s.id === 'lens-4').status, 'hidden', 'A word hidden before bulk approval must remain hidden');
 
       const pub = await authorityHandler({ httpMethod: 'GET', path: '/api/lens/approved' });
       const pubBody = JSON.parse(pub.body);
@@ -270,45 +272,52 @@ test('Manage Words: bulk approve pending submissions with moderate_all_pending',
   });
 });
 
-test('Manage Words: approved map and admin list paginate past 1,000 submissions', async () => {
+test('Manage Words: bulk approval, approved map, and admin list paginate past 1,000 submissions', async () => {
   await withAdminEnv(async () => {
     const adminToken = createAdminSession();
     const originalFetch = global.fetch;
     const rows = Array.from({ length: 1205 }, (_, i) => ({
       id: `lens-${i}`, phrase: `Word ${i}`, normalized_phrase: `word ${i}`,
-      status: 'approved', created_at: new Date(Date.UTC(2026, 8, 29, 0, 0, i % 60)).toISOString(),
+      status: 'pending', created_at: new Date(Date.UTC(2026, 8, 29, 0, 0, i % 60)).toISOString(),
       participants: { alias: `Player ${i}` }
     }));
+    rows.push({ id: 'hidden-first', phrase: 'Excluded', normalized_phrase: 'excluded', status: 'hidden', created_at: new Date().toISOString() });
     const offsets = [];
     global.fetch = async (url, options = {}) => {
       const target = new URL(String(url));
       if (target.pathname.endsWith('/events')) return new Response(JSON.stringify([{ id: 'test-event-id' }]), { status: 200 });
       if (target.pathname.endsWith('/admin_audit_logs')) return new Response(JSON.stringify([]), { status: 200 });
-      if (target.pathname.endsWith('/lens_submissions') && options.method === 'PATCH') return new Response('[]', { status: 200 });
+      if (target.pathname.endsWith('/lens_submissions') && options.method === 'PATCH') {
+        rows.forEach(row => { if (row.status === 'pending') row.status = 'approved'; });
+        return new Response('[]', { status: 200 });
+      }
       if (target.pathname.endsWith('/lens_submissions')) {
-        if (target.searchParams.get('status') === 'eq.pending') return new Response('[]', { status: 200 });
         const offset = Number(target.searchParams.get('offset') || 0);
         const limit = Number(target.searchParams.get('limit') || 1000);
         offsets.push(offset);
-        return new Response(JSON.stringify(rows.slice(offset, offset + Math.min(limit, 1000))), { status: 200 });
+        const status = target.searchParams.get('status')?.replace('eq.', '');
+        const matching = status ? rows.filter(row => row.status === status) : rows;
+        return new Response(JSON.stringify(matching.slice(offset, offset + Math.min(limit, 1000))), { status: 200 });
       }
       return new Response('[]', { status: 200 });
     };
     try {
       // Clear the prior test's in-memory public read cache through the real action.
-      await authorityHandler({
+      const bulkResult = await authorityHandler({
         httpMethod: 'POST', path: '/api/admin/action',
         headers: { authorization: `Bearer ${adminToken}` },
         body: JSON.stringify({ kind: 'moderate_all_pending' })
       });
+      assert.equal(JSON.parse(bulkResult.body).approved, 1205);
+      assert.equal(rows.find(row => row.id === 'hidden-first').status, 'hidden');
       const publicResult = await authorityHandler({ httpMethod: 'GET', path: '/api/lens/approved' });
       const adminResult = await authorityHandler({
         httpMethod: 'GET', path: '/api/admin/lens',
         headers: { authorization: `Bearer ${adminToken}` }
       });
       assert.equal(JSON.parse(publicResult.body).responses.length, 1205);
-      assert.equal(JSON.parse(adminResult.body).responses.length, 1205);
-      assert.deepEqual(offsets, [0, 1000, 0, 1000]);
+      assert.equal(JSON.parse(adminResult.body).responses.length, 1206);
+      assert.deepEqual(offsets, [0, 1000, 0, 1000, 0, 1000]);
     } finally {
       global.fetch = originalFetch;
     }
