@@ -140,6 +140,15 @@ header.display-header {
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
+.mosaic-coverage {
+  color: #FDE68A;
+  font-size: clamp(0.85rem, 1vw, 1.05rem);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.mosaic-coverage:empty { display: none; }
+
 /* Header Right - Stats & Live Indicator */
 .header-right {
   display: flex;

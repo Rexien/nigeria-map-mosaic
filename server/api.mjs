@@ -718,7 +718,7 @@ async function lens(e) {
 async function approvedLens() {
   const ev = await event();
   const responses = await publicReads.get('lens', 1000, async () => {
-    const rows = await db(`lens_submissions?event_id=eq.${ev.id}&status=eq.approved&select=id,phrase,normalized_phrase,created_at&order=created_at.desc&limit=1500`);
+    const rows = await dbAll(`lens_submissions?event_id=eq.${ev.id}&status=eq.approved&select=id,phrase,normalized_phrase,created_at&order=created_at.desc,id.desc`);
     return (rows || []).map(r => ({ id: r.id, phrase: r.phrase, normalized_phrase: r.normalized_phrase, created_at: r.created_at }));
   });
   return json(200, {
@@ -729,7 +729,7 @@ async function approvedLens() {
 
 async function adminLens(e, admin) {
   const ev = await event();
-  const rows = await db(`lens_submissions?event_id=eq.${ev.id}&select=id,phrase,created_at,status,participants(alias)&order=created_at.desc&limit=1500`);
+  const rows = await dbAll(`lens_submissions?event_id=eq.${ev.id}&select=id,phrase,created_at,status,participants(alias)&order=created_at.desc,id.desc`);
   return json(200, { responses: rows || [] });
 }
 
@@ -952,16 +952,18 @@ async function adminAction(e, admin) {
   }
 
   if (b.kind === 'moderate_all_pending') {
-    const updated = await db(`lens_submissions?event_id=eq.${ev.id}&status=eq.pending`, {
+    const pending = await dbAll(`lens_submissions?event_id=eq.${ev.id}&status=eq.pending&select=id&order=id.asc`);
+    await db(`lens_submissions?event_id=eq.${ev.id}&status=eq.pending`, {
       method: 'PATCH',
+      prefer: 'return=minimal',
       body: JSON.stringify({
         status: 'approved',
         reviewed_at: new Date().toISOString()
       })
     });
     publicReads.clear();
-    await audit(admin, ev, 'moderate_all_lens', 'lens_submissions', 'all_pending', null, { count: (updated || []).length });
-    return json(200, { approved: (updated || []).length });
+    await audit(admin, ev, 'moderate_all_lens', 'lens_submissions', 'all_pending', null, { count: pending.length });
+    return json(200, { approved: pending.length });
   }
 
   if (b.kind === 'clear_data') {

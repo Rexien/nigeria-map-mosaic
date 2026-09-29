@@ -233,6 +233,9 @@ test('Manage Words: bulk approve pending submissions with moderate_all_pending',
       if (urlStr.includes('/lens_submissions?event_id=eq.') && urlStr.includes('status=eq.approved')) {
         return new Response(JSON.stringify(dbSubmissions.filter(s => s.status === 'approved')), { status: 200 });
       }
+      if (urlStr.includes('/lens_submissions?event_id=eq.') && urlStr.includes('status=eq.pending') && !options.method) {
+        return new Response(JSON.stringify(dbSubmissions.filter(s => s.status === 'pending').map(s => ({ id: s.id }))), { status: 200 });
+      }
       if (urlStr.includes('/lens_submissions?event_id=eq.') && urlStr.includes('status=eq.pending') && options.method === 'PATCH') {
         const patch = JSON.parse(options.body);
         const updated = [];
@@ -261,6 +264,51 @@ test('Manage Words: bulk approve pending submissions with moderate_all_pending',
       const pub = await authorityHandler({ httpMethod: 'GET', path: '/api/lens/approved' });
       const pubBody = JSON.parse(pub.body);
       assert.equal(pubBody.responses.length, 3, 'All 3 submissions should now be approved on public map');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
+
+test('Manage Words: approved map and admin list paginate past 1,000 submissions', async () => {
+  await withAdminEnv(async () => {
+    const adminToken = createAdminSession();
+    const originalFetch = global.fetch;
+    const rows = Array.from({ length: 1205 }, (_, i) => ({
+      id: `lens-${i}`, phrase: `Word ${i}`, normalized_phrase: `word ${i}`,
+      status: 'approved', created_at: new Date(Date.UTC(2026, 8, 29, 0, 0, i % 60)).toISOString(),
+      participants: { alias: `Player ${i}` }
+    }));
+    const offsets = [];
+    global.fetch = async (url, options = {}) => {
+      const target = new URL(String(url));
+      if (target.pathname.endsWith('/events')) return new Response(JSON.stringify([{ id: 'test-event-id' }]), { status: 200 });
+      if (target.pathname.endsWith('/admin_audit_logs')) return new Response(JSON.stringify([]), { status: 200 });
+      if (target.pathname.endsWith('/lens_submissions') && options.method === 'PATCH') return new Response('[]', { status: 200 });
+      if (target.pathname.endsWith('/lens_submissions')) {
+        if (target.searchParams.get('status') === 'eq.pending') return new Response('[]', { status: 200 });
+        const offset = Number(target.searchParams.get('offset') || 0);
+        const limit = Number(target.searchParams.get('limit') || 1000);
+        offsets.push(offset);
+        return new Response(JSON.stringify(rows.slice(offset, offset + Math.min(limit, 1000))), { status: 200 });
+      }
+      return new Response('[]', { status: 200 });
+    };
+    try {
+      // Clear the prior test's in-memory public read cache through the real action.
+      await authorityHandler({
+        httpMethod: 'POST', path: '/api/admin/action',
+        headers: { authorization: `Bearer ${adminToken}` },
+        body: JSON.stringify({ kind: 'moderate_all_pending' })
+      });
+      const publicResult = await authorityHandler({ httpMethod: 'GET', path: '/api/lens/approved' });
+      const adminResult = await authorityHandler({
+        httpMethod: 'GET', path: '/api/admin/lens',
+        headers: { authorization: `Bearer ${adminToken}` }
+      });
+      assert.equal(JSON.parse(publicResult.body).responses.length, 1205);
+      assert.equal(JSON.parse(adminResult.body).responses.length, 1205);
+      assert.deepEqual(offsets, [0, 1000, 0, 1000]);
     } finally {
       global.fetch = originalFetch;
     }

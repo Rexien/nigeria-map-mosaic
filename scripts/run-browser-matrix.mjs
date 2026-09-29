@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const SERVER_PORT = 4191;
 const CDP_PORT = 9226;
+let mosaicFixtureResponses = null;
 
 // Minimal static file server for tests
 const mime = {
@@ -38,6 +39,11 @@ const routes = {
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://127.0.0.1');
+    if (url.pathname === '/api/lens/approved' && mosaicFixtureResponses) {
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ responses: mosaicFixtureResponses }));
+      return;
+    }
     const relative = routes[url.pathname] || url.pathname.slice(1);
     const safe = normalize(relative).replace(/^(\.\.(\/|\\|$))+/, '');
     const file = join(root, safe);
@@ -234,7 +240,7 @@ const results = [];
 
 console.log('\n--- EXERCISING REAL BROWSER VIEWPORT MATRIX ---');
 
-for (const vp of matrix) {
+for (const vp of process.env.NIAC_DENSITY_ONLY === '1' ? [] : matrix) {
   await setViewport(vp.width, vp.height, vp.isMobile);
 
   if (vp.isMobile) {
@@ -830,6 +836,54 @@ for (const vp of matrix) {
       details: `Fits in viewport: ${lbMetrics.fitsInViewport} (${lbMetrics.scrollHeight}px / ${lbMetrics.innerHeight}px)`
     });
     if (!lbOk) allPassed = false;
+  }
+}
+
+if (process.env.NIAC_TEST_MOSAIC_DENSITY === '1') {
+  // Exercise the actual D3/cloud projector, not a design mockup or DOM stub.
+  const mosaicWidth = Number(process.env.NIAC_MOSAIC_WIDTH || 1920);
+  const mosaicHeight = Number(process.env.NIAC_MOSAIC_HEIGHT || 1080);
+  mosaicFixtureResponses = Array.from({ length: 500 }, (_, i) => ({
+    id: `mosaic-${i}`,
+    phrase: i % 5 === 0
+      ? `Shared Nigerian Dream ${String(i + 1).padStart(3, '0')}`
+      : `Vision ${String(i + 1).padStart(3, '0')}`,
+    normalized_phrase: `vision ${String(i + 1).padStart(3, '0')}`,
+    created_at: new Date(Date.UTC(2026, 8, 29, 0, 0, i % 60)).toISOString()
+  }));
+  await setViewport(mosaicWidth, mosaicHeight);
+  await navigate(`http://127.0.0.1:${SERVER_PORT}/lens/live?embed=1`);
+  const seen = new Set();
+  let firstCount = 0;
+  let finalStatus = null;
+  for (let i = 0; i < 150; i++) {
+    const status = await evaluate(`() => ({
+      total: Number(document.querySelector('#stat-total-count')?.textContent),
+      unique: Number(document.querySelector('#stat-unique-count')?.textContent),
+      stems: [...document.querySelectorAll('#words-layer .cloud-word')].map(node => node.dataset.stem),
+      coverage: document.querySelector('#mosaic-coverage')?.textContent || '',
+      horizontalScroll: document.documentElement.scrollWidth > innerWidth + 2
+    })`);
+    finalStatus = status;
+    if (status?.stems?.length && !firstCount) firstCount = status.stems.length;
+    for (const stem of status?.stems || []) seen.add(stem);
+    if (status?.unique === 500 && seen.size === 500) break;
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  const pass = finalStatus?.total === 500 && finalStatus?.unique === 500 &&
+    seen.size === 500 && !finalStatus?.horizontalScroll;
+  results.push({
+    viewport: `Projector (${mosaicWidth}×${mosaicHeight})`,
+    test: '500 unique approved words rotate through real mosaic',
+    pass,
+    details: `Received: ${finalStatus?.total}, unique: ${finalStatus?.unique}, first composition: ${firstCount}, seen across rotations: ${seen.size}/500, H-scroll: ${finalStatus?.horizontalScroll}, label: ${finalStatus?.coverage}`
+  });
+  if (!pass) allPassed = false;
+  if (process.env.NIAC_CAPTURE_SCREENSHOTS === '1') {
+    const dir = join(root, 'artifacts', 'qa');
+    await mkdir(dir, { recursive: true });
+    const screenshot = await cdpSend('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+    await writeFile(join(dir, `mosaic-500-${mosaicWidth}x${mosaicHeight}.png`), Buffer.from(screenshot.data, 'base64'));
   }
 }
 
