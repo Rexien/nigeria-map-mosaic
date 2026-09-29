@@ -304,14 +304,28 @@
 
     const stemmer = window.WordStemmer;
     const config = window.APP_CONFIG || {};
-    const wordGroups = stemmer ? stemmer.aggregateWordGroups(allResponses) : [];
+    const allGroups = stemmer ? stemmer.aggregateWordGroups(allResponses) : [];
 
-    if (wordGroups.length === 0) {
+    if (allGroups.length === 0) {
       wordsGroupEl.innerHTML = '';
       renderedWordMap.clear();
       isRepacking = false;
       if (repackIndicator) repackIndicator.classList.remove('visible');
       return;
+    }
+
+    // Maintain up to 160 UNIQUE words on the map
+    // When exceeding 160 unique words, kick oldest inactive unique words while preserving core anchor themes
+    let wordGroups = allGroups;
+    if (allGroups.length > 160) {
+      const topAnchors = allGroups.filter(g => g.count > 1).slice(0, 30);
+      const anchorStems = new Set(topAnchors.map(g => g.stem));
+      const remainingSlots = 160 - topAnchors.length;
+      const recentUnique = allGroups
+        .filter(g => !anchorStems.has(g.stem))
+        .sort((a, b) => b.latestAt - a.latestAt)
+        .slice(0, remainingSlots);
+      wordGroups = topAnchors.concat(recentUnique).sort((a, b) => b.count - a.count || b.latestAt - a.latestAt);
     }
 
     // Scale font sizes based on total unique words (max capped at 160)

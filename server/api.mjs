@@ -718,7 +718,7 @@ async function lens(e) {
 async function approvedLens() {
   const ev = await event();
   const responses = await publicReads.get('lens', 1000, async () => {
-    const rows = await db(`lens_submissions?event_id=eq.${ev.id}&status=eq.approved&select=id,phrase,normalized_phrase,created_at&order=created_at.desc,id.desc&limit=160`);
+    const rows = await dbAll(`lens_submissions?event_id=eq.${ev.id}&status=eq.approved&select=id,phrase,normalized_phrase,created_at&order=created_at.desc,id.desc`);
     return (rows || []).map(r => ({ id: r.id, phrase: r.phrase, normalized_phrase: r.normalized_phrase, created_at: r.created_at }));
   });
   return json(200, {
