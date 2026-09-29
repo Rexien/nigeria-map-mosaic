@@ -1,6 +1,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handler } from '../server/api.mjs';
+import { verifyParticipantCredential } from '../lib/credentials.mjs';
+
+test('returning participant can refresh a signed gateway credential without rejoining by alias', async () => {
+  const originalFetch = global.fetch;
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_URL = 'https://db.example';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
+  const paths = [];
+  global.fetch = async url => {
+    const path = String(url);
+    paths.push(path);
+    assert.match(path, /participants\?token_hash=eq\./);
+    return new Response(JSON.stringify([{ id: 'player-1', event_id: 'event-1', alias: 'Prosper', is_spectator: false, is_rehearsal: false }]), { status: 200 });
+  };
+  try {
+    const missing = await handler({ httpMethod: 'GET', path: '/api/me/credential', headers: {} });
+    assert.equal(missing.statusCode, 401);
+    const response = await handler({ httpMethod: 'GET', path: '/api/me/credential', headers: { authorization: 'Bearer old-participant-token' } });
+    assert.equal(response.statusCode, 200);
+    assert.equal(paths.length, 1);
+    const signed = JSON.parse(response.body).credential;
+    const verified = verifyParticipantCredential(signed);
+    assert.equal(verified.valid, true);
+    assert.equal(verified.payload.participantId, 'player-1');
+    assert.equal(verified.payload.eventId, 'event-1');
+  } finally {
+    global.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
+  }
+});
 
 test('personal score reads the latest completed snapshot without depending on the current screen version', async () => {
   const originalFetch = global.fetch;

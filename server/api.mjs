@@ -632,6 +632,18 @@ async function me(e) {
   });
 }
 
+async function myCredential(e) {
+  const p = await participant(e);
+  rateLimit(p.id, 'credential-refresh', 20, 60000);
+  const credential = signParticipantCredential({
+    participantId: p.id,
+    eventId: p.event_id,
+    isSpectator: p.is_spectator,
+    isRehearsal: p.is_rehearsal
+  });
+  return json(200, { credential });
+}
+
 async function myAnswer(e) {
   const p = await participant(e);
   rateLimit(p.id, 'answer-check', 6, 10000);
@@ -1187,6 +1199,8 @@ export async function handler(e) {
         res = await liveState();
       } else if (method === 'GET' && route === 'me') {
         res = await me(e);
+      } else if (method === 'GET' && route === 'me/credential') {
+        res = await myCredential(e);
       } else if (method === 'GET' && route === 'me/answer') {
         res = await myAnswer(e);
       } else if (method === 'POST' && route === 'answers') {
