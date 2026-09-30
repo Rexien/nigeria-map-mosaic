@@ -128,7 +128,7 @@
         $('#open-question').disabled=!select.value;
         $('#next-clue').classList.add('hidden');
       }else if(state==='preparing'){
-        $('#open-question').innerHTML='<span>Open voting (30s)</span><small>Show map + A–D</small>';
+        $('#open-question').innerHTML='<span>Open voting (10s)</span><small>Show map + A–D</small>';
         $('#open-question').disabled=false;
         $('#next-clue').classList.add('hidden');
         $('#next-clue').disabled=true;
@@ -189,7 +189,7 @@
     }
     $$('[name="active-activity"]').forEach(input=>{input.onclick=()=>{$$('[name="active-activity"]').forEach(i=>{i.checked=(i===input)});changeActivity(input.value)}});
     $('#question-select').onchange=()=>{$('#open-question').disabled=!$('#question-select').value||adminStatus?.session?.state==='open'||adminStatus?.session?.state==='ended'};
-    $('#open-question').onclick=event=>{const qSelect=$('#question-select').value;const currentId=adminStatus?.session?.current_question_id||adminStatus?.session?.currentQuestionId;const questionId=qSelect||currentId;if(!questionId)return show($('#admin-message'),'Choose a question first.',true);const act=adminStatus?.settings?.active_activity||'passport';const state=adminStatus?.session?.state||'lobby';if(act==='decode'&&state==='lobby'){perform({kind:'select_question',questionId},'All three clues are on the big screen and phones.',event.currentTarget)}else if(act==='decode'&&state==='preparing'){perform({kind:'open_question',questionId},'Voting is now open! 30-second countdown started.',event.currentTarget)}else{perform({kind:'open_question',questionId},'Question opened on the projector and phones.',event.currentTarget)}};
+    $('#open-question').onclick=event=>{const qSelect=$('#question-select').value;const currentId=adminStatus?.session?.current_question_id||adminStatus?.session?.currentQuestionId;const questionId=qSelect||currentId;if(!questionId)return show($('#admin-message'),'Choose a question first.',true);const act=adminStatus?.settings?.active_activity||'passport';const state=adminStatus?.session?.state||'lobby';if(act==='decode'&&state==='lobby'){perform({kind:'select_question',questionId},'All three clues are on the big screen and phones.',event.currentTarget)}else if(act==='decode'&&state==='preparing'){perform({kind:'open_question',questionId},'Voting is now open! 10-second countdown started.',event.currentTarget)}else{perform({kind:'open_question',questionId},'Question opened on the projector and phones.',event.currentTarget)}};
     $$('[data-state]').forEach(button=>button.onclick=event=>perform({state:button.dataset.state},states[button.dataset.state]||'Screen updated.',event.currentTarget));
     $('#next-clue').onclick=event=>perform({kind:'next_clue'},'The next clue is now showing.',event.currentTarget);
     $('#save-settings').onclick=()=>changeActivity($('[name="active-activity"]:checked')?.value||'lens');

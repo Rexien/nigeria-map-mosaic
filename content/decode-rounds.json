@@ -53,7 +53,7 @@
       "revealFact": "Ogun State's capital Abeokuta takes its name ('under the rock') from Olumo Rock, which served as a fortress for the Egba people in the 1830s.",
       "source": "Encyclopaedia Britannica; National Commission for Museums and Monuments Nigeria",
       "reviewStatus": "approved",
-      "durationSeconds": 30
+      "durationSeconds": 10
     },
     {
       "id": "decode-2",
@@ -107,7 +107,7 @@
       "revealFact": "Kano was the terminus of ancient trans-Saharan trade routes. The Kofar Mata dye pits were established in 1498 during the reign of Sarki Muhammadu Rumfa.",
       "source": "Kano Chronicle; UNESCO Tentative List (Ancient Kano City Walls)",
       "reviewStatus": "approved",
-      "durationSeconds": 30
+      "durationSeconds": 10
     },
     {
       "id": "decode-3",
@@ -161,7 +161,7 @@
       "revealFact": "Niger State is Nigeria's largest state by land area (spanning over 76,000 km²) and hosts three major hydroelectric dams: Kainji, Jebba, and Shiroro.",
       "source": "National Bureau of Statistics Nigeria; Federal Ministry of Power",
       "reviewStatus": "approved",
-      "durationSeconds": 30
+      "durationSeconds": 10
     },
     {
       "id": "decode-4",
@@ -215,7 +215,7 @@
       "revealFact": "The Igbo-Ukwu bronzes date to the 9th century AD, centuries before European contact, demonstrating indigenous West African metallurgical mastery.",
       "source": "Thurstan Shaw (Igbo-Ukwu: An Account of Archaeological Discoveries); UNESCO World Heritage Tentative List",
       "reviewStatus": "approved",
-      "durationSeconds": 30
+      "durationSeconds": 10
     },
     {
       "id": "decode-5",
@@ -269,7 +269,7 @@
       "revealFact": "Cross River National Park is one of the oldest rainforests in Africa, home to endangered Cross River gorillas and rare biodiversity.",
       "source": "Cross River State Tourism Bureau; Nigeria National Parks Service",
       "reviewStatus": "approved",
-      "durationSeconds": 30
+      "durationSeconds": 10
     },
     {
       "id": "decode-6",
@@ -323,7 +323,7 @@
       "revealFact": "Lekki Conservation Centre features the longest canopy walkway in Africa (401 meters), built by the Nigerian Conservation Foundation in 1990.",
       "source": "Nigerian Conservation Foundation; Lagos State Ministry of Tourism, Arts and Culture",
       "reviewStatus": "approved",
-      "durationSeconds": 30
+      "durationSeconds": 10
     }
   ]
 }

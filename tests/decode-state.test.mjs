@@ -25,7 +25,7 @@ test('decode rounds bank has 6 vetted candidate rounds with 3 clues and 4 balanc
     assert.ok(round.options.includes(round.state), `Round ${round.state} options must include the correct state`);
     assert.equal(round.options[round.correctOption], round.state, `correctOption must point to the correct state`);
     assert.ok(round.revealFact && round.revealFact.length > 20, `Round ${round.state} must have detailed revealFact`);
-    assert.equal(round.durationSeconds, 30, `Round ${round.state} must have 30s voting duration`);
+    assert.equal(round.durationSeconds, 10, `Round ${round.state} must have 10s voting duration`);
 
     optionCounts[round.correctOption]++;
 
