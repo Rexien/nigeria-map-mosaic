@@ -13,7 +13,7 @@ for(const day of [1,2]){
   if(!round)[round]=await db('quiz_rounds',{method:'POST',body:JSON.stringify({game_id:passport.id,day,title:`Day ${day}`,display_order:day,status:'draft'})});
   for(const item of questions.questions.filter(q=>q.day===day)){
     if((await db(`quiz_questions?round_id=eq.${round.id}&display_order=eq.${item.order}&select=id`))[0])continue;
-    const [q]=await db('quiz_questions',{method:'POST',body:JSON.stringify({round_id:round.id,category:item.category.toLowerCase().replace(' nigeria',''),question:item.question,correct_option:item.correctOption,duration_seconds:item.durationSeconds||20,explanation:item.explanation,source:item.source,review_status:item.reviewStatus||'approved',media:item.media||null,image_fallback:item.fallback||null,display_order:item.order})});
+    const [q]=await db('quiz_questions',{method:'POST',body:JSON.stringify({round_id:round.id,category:item.category.toLowerCase().replace(' nigeria',''),question:item.question,correct_option:item.correctOption,duration_seconds:item.durationSeconds||7,explanation:item.explanation,source:item.source,review_status:item.reviewStatus||'approved',media:item.media||null,image_fallback:item.fallback||null,display_order:item.order})});
     await db('question_options',{method:'POST',body:JSON.stringify(item.options.map((label,option_index)=>({question_id:q.id,option_index,label})))});
   }
 }
